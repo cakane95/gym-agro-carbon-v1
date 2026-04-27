@@ -1,0 +1,125 @@
+"""
+Minimal experiment test: reproduces run_basic_agrocarbon.py 
+but with ContextualGamaEnv and sequential runs.
+
+Usage:
+    docker-compose exec gym-agent python tests/test_mini_experiment.py
+"""
+
+import os
+import sys
+import asyncio
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+sys.path.insert(0, PROJECT_ROOT)
+
+from src.contextual_stat_rl.experiments.sequential_experiment import (
+    runSequentialGamaExperiment as xp,
+    build_oracle_env,
+)
+
+from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ETC import GlobalETC4
+from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualIMED_RL import GlobalIMEDRL, SemiLocalIMEDRL
+from src.contextual_stat_rl.learners.ContextualMDPs_discrete.Optimal import ContextualOptimalControl as opt
+from src.contextual_stat_rl.environments.gama_register import make_gama
+
+
+async def main():
+    gaml_path = os.environ.get(
+        "GAML_PATH",
+        "/usr/lib/gama/workspace/gama_models/EcoSysML/models/main.gaml"
+    )
+
+    print("=" * 60)
+    print("Mini Experiment: GAMA + RL Agents")
+    print(f"  GAML:         {gaml_path}")
+    print(f"  Horizon:      20")
+    print(f"  Replicates:   5")
+    print("=" * 60)
+
+    # 1. Register and create the environment
+    #    register_gama_env returns the registered gym name
+    #    make_gama creates the first instance (for oracle + setup)
+    env = make_gama(
+        "gama-agrocarbon-agnostic",
+        gaml_experiment_path=gaml_path,
+    )
+
+    nS = env.nS
+    nA = env.nA
+    nC = env.nC
+    skeleton = env.skeleton
+
+    # 2. Define agents (same as run_basic_agrocarbon.py)
+    agents = [
+        (
+            GlobalETC4,
+            {
+                "nS": nS,
+                "nA": nA,
+                "nC": nC,
+                "skeleton": skeleton,
+                "gamma": 0.99,
+                "epsilon": 1e-6,
+                "max_iter": 1000,
+                "name": "GlobalETC4",
+            },
+        ),
+        (
+            GlobalIMEDRL,
+            {
+                "nbr_states": nS,
+                "nbr_actions": nA,
+                "nbr_contexts": nC,
+                "skeleton": skeleton,
+                "max_iter": 3000,
+                "epsilon": 1e-3,
+                "max_reward": 1.5,
+            },
+        ),
+        (
+            SemiLocalIMEDRL,
+            {
+                "nbr_states": nS,
+                "nbr_actions": nA,
+                "nbr_contexts": nC,
+                "skeleton": skeleton,
+                "max_iter": 3000,
+                "epsilon": 1e-3,
+                "max_reward": 1.5,
+            },
+        ),
+    ]
+
+    # 3. Build oracle on pure-Python env (no GAMA overhead)
+    oracle_env = build_oracle_env(env)
+    oracle = opt.build_opti(oracle_env.name, oracle_env, nS, nA)
+
+    # 4. Setup output
+    root_folder = os.path.join(CURRENT_DIR, "results_gama") + os.sep
+    os.makedirs(root_folder, exist_ok=True)
+
+    # 5. Run experiment (small scale)
+    print(f"\nStarting experiment on {env.name}...")
+
+    try:
+        xp(
+            env,
+            agents,
+            oracle,
+            timeHorizon=20,
+            nbReplicates=100,
+            root_folder=root_folder,
+            oracle_env=oracle_env,
+        )
+
+        print("\n[DONE] Mini experiment completed.")
+
+    # 6. Cleanup the initial env
+    finally:
+        env.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,0 +1,21 @@
+services:
+  gama-headless:
+    image: gamaplatform/gama:latest
+    ports:
+      - "6868:6868"
+    volumes:
+      - ./gama_models:/usr/lib/gama/workspace/gama_models
+    command: -socket 6868
+
+  gym-agent:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    depends_on:
+      - gama-headless
+    environment:
+      - GAMA_HOST=gama-headless 
+      - GAMA_PORT=6868
+      - PYTHONPATH=/app
