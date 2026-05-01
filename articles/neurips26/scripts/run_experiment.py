@@ -20,8 +20,10 @@ PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
 from src.contextual_stat_rl.environments.gama_register import make_gama
+from src.contextual_stat_rl.environments.register import make
 from src.contextual_stat_rl.experiments.sequential_experiment import (
     runSequentialGamaExperiment,
+    runSequentialPythonExperiment,
     build_oracle_env,
 )
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.Optimal import (
@@ -99,12 +101,18 @@ async def main():
     # -------------------------------------------------------
     # Parse command line
     # -------------------------------------------------------
-    if len(sys.argv) < 2:
-        print("Usage: python run_experiment.py <config.yaml>")
+    python_only = "--python-only" in sys.argv
+
+    args = [arg for arg in sys.argv[1:] if arg != "--python-only"]
+
+    if len(args) < 1:
+        print("Usage: python run_experiment.py [--python-only] <config.yaml>")
         print("Example: python run_experiment.py configs/scenario_1_easy_det.yaml")
+        print("Example: python run_experiment.py --python-only configs/scenario_1_easy_det.yaml")
         sys.exit(1)
 
-    config_path = sys.argv[1]
+    config_path = args[0]
+
     if not os.path.exists(config_path):
         print(f"Config file not found: {config_path}")
         sys.exit(1)
@@ -147,20 +155,38 @@ async def main():
     gaml_experiment_name = gama_cfg.get("gaml_experiment_name", "gym_env")
 
     # -------------------------------------------------------
-    # Create GAMA environment
+    # Create environment
     # -------------------------------------------------------
-    env = make_gama(
-        exp_cfg["name"],
-        nS=env_cfg["nS"],
-        nA=env_cfg["nA"],
-        nC=env_cfg["nC"],
-        trigger_action=env_cfg.get("trigger_action", 2),
-        p_cut=env_cfg["p_cut"],
-        difficulty=env_cfg["difficulty"],
-        compliance_params=farmer_cfg,
-        gaml_experiment_path=gaml_path,
-        gaml_experiment_name=gaml_experiment_name,
-    )
+    if python_only:
+        env_name = exp_cfg["name"].replace("gama-", "")
+
+        print("[MODE] Python-only backend")
+        print(f"[MODE] Python env name: {env_name}")
+
+        env = make(
+            env_name,
+            nS=env_cfg["nS"],
+            nA=env_cfg["nA"],
+            nC=env_cfg["nC"],
+            trigger_action=env_cfg.get("trigger_action", 2),
+            p_cut=env_cfg["p_cut"],
+            difficulty=env_cfg["difficulty"],
+        )
+    else:
+        print("[MODE] GAMA backend")
+
+        env = make_gama(
+            exp_cfg["name"],
+            nS=env_cfg["nS"],
+            nA=env_cfg["nA"],
+            nC=env_cfg["nC"],
+            trigger_action=env_cfg.get("trigger_action", 2),
+            p_cut=env_cfg["p_cut"],
+            difficulty=env_cfg["difficulty"],
+            compliance_params=farmer_cfg,
+            gaml_experiment_path=gaml_path,
+            gaml_experiment_name=gaml_experiment_name,
+        )
 
     nS = env.nS
     nA = env.nA
@@ -175,13 +201,17 @@ async def main():
     # -------------------------------------------------------
     # Build oracle on pure-Python env
     # -------------------------------------------------------
-    oracle_env = build_oracle_env(env)
+    if python_only:
+        oracle_env = env
+    else:
+        oracle_env = build_oracle_env(env)
     oracle = opt.build_opti(oracle_env.name, oracle_env, nS, nA)
 
     # -------------------------------------------------------
     # Setup output directory
     # -------------------------------------------------------
-    results_dir = os.path.join(SCRIPT_DIR, "..", "results", scenario_name) + os.sep
+    results_root = "results_python" if python_only else "results"
+    results_dir = os.path.join(SCRIPT_DIR, "..", results_root, scenario_name) + os.sep
     os.makedirs(results_dir, exist_ok=True)
 
     # -------------------------------------------------------
@@ -191,20 +221,34 @@ async def main():
     print(f"Starting experiment...\n")
 
     try:
-        runSequentialGamaExperiment(
-            env=env,
-            agents=agents,
-            oracle=oracle,
-            timeHorizon=exp_cfg["timeHorizon"],
-            opttimeHorizon=exp_cfg.get("opttimeHorizon", 10000),
-            nbReplicates=exp_cfg["nbReplicates"],
-            root_folder=results_dir,
-            oracle_env=oracle_env,
-        )
-        print(f"\n[DONE] Experiment '{scenario_name}' completed successfully.")
+        if python_only:
+            runSequentialPythonExperiment(
+                env=env,
+                agents=agents,
+                oracle=oracle,
+                timeHorizon=exp_cfg["timeHorizon"],
+                opttimeHorizon=exp_cfg.get("opttimeHorizon", 10000),
+                nbReplicates=exp_cfg["nbReplicates"],
+                root_folder=results_dir,
+            )
+        else:
+            runSequentialGamaExperiment(
+                env=env,
+                agents=agents,
+                oracle=oracle,
+                timeHorizon=exp_cfg["timeHorizon"],
+                opttimeHorizon=exp_cfg.get("opttimeHorizon", 10000),
+                nbReplicates=exp_cfg["nbReplicates"],
+                root_folder=results_dir,
+                oracle_env=oracle_env,
+            )
+
+        backend_name = "Python" if python_only else "GAMA"
+        print(f"\n[DONE] {backend_name} experiment '{scenario_name}' completed successfully.")
 
     finally:
-        env.close()
+        if hasattr(env, "close"):
+            env.close()
 
 
 if __name__ == "__main__":

@@ -4,7 +4,10 @@ import numpy as np
 import sys
 
 
-from src.contextual_stat_rl.environments.ContextualMDPs_discrete.factories.agrocarbon_factory import build_agnostic_agrocarbon_config
+from src.contextual_stat_rl.environments.ContextualMDPs_discrete.factories.agrocarbon_factory import (
+    build_agnostic_agrocarbon_config,
+    build_reward_contextual_agrocarbon_config,
+)
 
 INFINITY = sys.maxsize
 
@@ -56,8 +59,9 @@ def registerContextualMDP(
 
 # 2. The Clean Registry Dictionary
 registerContextualStatisticalRLenvironments = {
-    # Map the Gym ID to the factory function pointer (do not call the function here)
     "basic-agrocarbon-context": build_agnostic_agrocarbon_config,
+    "agrocarbon-agnostic": build_agnostic_agrocarbon_config,
+    "agrocarbon-reward-contextual": build_reward_contextual_agrocarbon_config,
 }
 
 
@@ -69,15 +73,13 @@ def print_envlist():
     print("-" * 30)
 
 
-def register_env(envName):
+def register_env(envName, **kwargs):
     """Dynamically builds and registers the environment only when requested."""
     if envName in registerContextualStatisticalRLenvironments.keys():
-        # Call the factory to generate the config dictionary
-        config = registerContextualStatisticalRLenvironments[envName]()
-        
-        # Pass the unpacked config to the registration function
+        config = registerContextualStatisticalRLenvironments[envName](**kwargs)
+
         regName = registerContextualMDP(name=envName, **config)
-        
+
         if not isinstance(regName, str):
             raise TypeError(f"Registered environment name must be a string, got {type(regName)}")
         print(f"[REGISTER.INFO] Environment {envName} registered as {regName}")
@@ -90,5 +92,5 @@ def makeWorld(registername):
     return gymnasium.make(registername).unwrapped
 
 
-def make(envName):
-    return makeWorld(register_env(envName))
+def make(envName, **kwargs):
+    return makeWorld(register_env(envName, **kwargs))

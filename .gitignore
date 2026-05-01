@@ -224,6 +224,8 @@ __marimo__/
 logs/
 results/
 results_gama/
+results_python/
+backend_runtime_comparison/
 summary/
 *.npy
 *.csv

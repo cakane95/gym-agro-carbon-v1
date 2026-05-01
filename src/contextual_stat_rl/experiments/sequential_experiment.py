@@ -356,7 +356,7 @@ def plot_action_heatmaps_over_time(
 
 
 # ==========================================
-# Main Experiment Runner
+# Main Experiment Runners
 # ==========================================
 
 def runSequentialGamaExperiment(
@@ -535,3 +535,192 @@ def runSequentialGamaExperiment(
     print(f"[INFO] Regret plots: {regret_folder}")
     print(f"[INFO] Action plots: {actions_folder}")
     print(f"[INFO] Compliance CSV: {compliance_csv_path}")
+
+def runSequentialPythonExperiment(
+    env,
+    agents,
+    oracle,
+    timeHorizon=1000,
+    opttimeHorizon=None,
+    nbReplicates=100,
+    root_folder="results_python/",
+):
+    """
+    Sequential experiment runner for pure-Python contextual MDP environments.
+
+    This runner is used to benchmark the overhead of the GAMA backend.
+    It assumes full compliance by construction: the action recommended by
+    the learner is the action executed by the environment.
+
+    Produces:
+    - Cumulative regret plots in {root_folder}/regret/
+    - Action distribution plots in {root_folder}/actions/
+    - Action heatmaps over time in {root_folder}/actions/
+    """
+    regret_folder = os.path.join(root_folder, "regret") + os.sep
+    actions_folder = os.path.join(root_folder, "actions") + os.sep
+
+    os.makedirs(regret_folder, exist_ok=True)
+    os.makedirs(actions_folder, exist_ok=True)
+
+    envFullName = env.name
+    action_names = getattr(env, "nameActions", [f"a{i}" for i in range(env.nA)])
+
+    learners = [x[0](**x[1]) for x in agents]
+
+    print("*********************************************")
+    print("[SEQ-PY] Running pure-Python experiment")
+
+    dump_cumRewardsAlgos = []
+    names = []
+    meanelapsedtimes = []
+    all_action_counts = []
+    all_time_action_freqs = []
+
+    for learner in learners:
+        names.append(learner.name())
+        print(
+            f"[SEQ-PY] Running {learner.name()} "
+            f"({nbReplicates} replicates, horizon={timeHorizon})..."
+        )
+
+        (
+            dump_cumRewards,
+            meanelapsedtime,
+            avg_action_counts,
+            time_action_freqs,
+            _compliance_records,
+        ) = sequentialRuns(
+            env,
+            learner,
+            nbReplicates,
+            timeHorizon,
+            root_folder=regret_folder,
+        )
+
+        dump_cumRewardsAlgos.append(dump_cumRewards)
+        meanelapsedtimes.append(meanelapsedtime)
+        all_action_counts.append(avg_action_counts)
+        all_time_action_freqs.append(time_action_freqs)
+
+        print(
+            f"[SEQ-PY] {learner.name()} done. "
+            f"Avg time per replicate: {meanelapsedtime:.4f}s"
+        )
+
+    if opttimeHorizon is None:
+        opttimeHorizon = min(max(1000000, timeHorizon), 10**8)
+
+    print("[SEQ-PY] Running oracle on pure-Python env...")
+
+    oracle_t0 = time.time()
+
+    dump_cumRewardsopt = oracle_contextual_with_dump(
+        env,
+        oracle,
+        timeHorizon=timeHorizon,
+        nbReplicates=nbReplicates,
+        root_folder=regret_folder,
+    )
+
+    oracle_elapsed = time.time() - oracle_t0
+    oracle_mean_elapsed = oracle_elapsed / nbReplicates
+
+    dump_cumRewardsAlgos.append(dump_cumRewardsopt)
+
+    print(
+        f"[SEQ-PY] Oracle done. "
+        f"Total time: {oracle_elapsed:.4f}s | "
+        f"Avg time per replicate: {oracle_mean_elapsed:.6f}s"
+    )
+
+    timestamp = str(time.time())
+    logfilename = regret_folder + "logfile_" + env.name + "_" + timestamp + ".txt"
+
+    with open(logfilename, "w") as logfile:
+        logfile.write("Backend Python\n")
+        logfile.write("Environment " + env.name + "\n")
+        logfile.write("Optimal policy is: " + str(oracle.policy) + "\n")
+        logfile.write("Learners " + str([learner.name() for learner in learners]) + "\n")
+        logfile.write(
+            "Time horizon is " + str(timeHorizon)
+            + ", nb of replicates is " + str(nbReplicates) + "\n"
+        )
+
+        for i in range(len(names)):
+            logfile.write(
+                str(names[i]) + " average runtime is "
+                + str(meanelapsedtimes[i]) + "\n"
+            )
+
+        logfile.write("Oracle total runtime is " + str(oracle_elapsed) + "\n")
+        logfile.write(
+            "Oracle average runtime per replicate is "
+            + str(oracle_mean_elapsed) + "\n"
+        )
+
+        mean, median, quantile1, quantile2, times = aR.computeCumulativeRegrets(
+            names,
+            dump_cumRewardsAlgos,
+            timeHorizon,
+            envFullName,
+            root_folder=regret_folder,
+        )
+
+        title = f"{env.name} — Python backend"
+
+        plR.plotCumulativeRegrets(
+            names,
+            envFullName,
+            title,
+            mean,
+            median,
+            quantile1,
+            quantile2,
+            times,
+            timeHorizon,
+            logfile=logfile,
+            timestamp=timestamp,
+            root_folder=regret_folder,
+        )
+
+    plot_action_distribution(
+        names,
+        all_action_counts,
+        action_names,
+        title=f"Action Distribution — {env.name} — Python backend",
+        output_path=os.path.join(
+            actions_folder,
+            f"action_distribution_{env.name}_{timestamp}.png",
+        ),
+    )
+
+    plot_action_distribution_by_context(
+        names,
+        all_action_counts,
+        action_names,
+        nC=env.nC,
+        title=f"Action Distribution by Context — {env.name} — Python backend",
+        output_path=os.path.join(
+            actions_folder,
+            f"action_distribution_by_context_{env.name}_{timestamp}.png",
+        ),
+    )
+
+    plot_action_heatmaps_over_time(
+        names,
+        all_time_action_freqs,
+        action_names,
+        title=f"Action Frequencies Over Time — {env.name} — Python backend",
+        output_path=os.path.join(
+            actions_folder,
+            f"action_heatmaps_over_time_{env.name}_{timestamp}.png",
+        ),
+        cmap="PuBu",
+    )
+
+    oR.clear_auxiliaryfiles(env, regret_folder)
+
+    print(f"\n[INFO] Log-file: {logfilename}")
+    print(f"[INFO] Regret plots: {regret_folder}")
+    print(f"[INFO] Action plots: {actions_folder}")
