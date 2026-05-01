@@ -20,6 +20,7 @@ from src.contextual_stat_rl.experiments.sequential_experiment import (
 
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ETC import GlobalETC
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualIMED_RL import GlobalIMEDRL, SemiLocalIMEDRL
+from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualUCRL3 import GlobalUCRL3
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.Optimal import ContextualOptimalControl as opt
 from src.contextual_stat_rl.environments.gama_register import make_gama
 
@@ -87,6 +88,18 @@ async def main():
                 "max_iter": 3000,
                 "epsilon": 1e-3,
                 "max_reward": 2.5,
+            },
+        ),
+        (
+            GlobalUCRL3,
+            {
+                "nS": nS,
+                "nA": nA,
+                "nC": nC,
+                "delta": 0.05,
+                "K": -1,
+                "max_reward": 2.5,
+                "name": "GlobalUCRL3",
             },
         ),
     ]

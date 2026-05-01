@@ -165,59 +165,92 @@ class ContextualGamaEnv(ContextualDiscreteMDP):
  
     def step(self, action):
         """
-        Execute one step via GAMA.
- 
-        1. Send [action] to GAMA (list format for batch compatibility).
-        2. GAMA executes StepTask + CutTask on the parcel.
-        3. Parse the response to extract (c, s), reward, info.
-        4. Update internal state.
- 
+        Execute one environment step through GAMA.
+
+        The input action is interpreted as the action recommended by the RL
+        learner. GAMA may execute this recommendation directly or modify it
+        through the farmer compliance mechanism. The reward and the regret
+        reference mean must therefore be computed from the action actually
+        executed by GAMA, not necessarily from the action recommended by the
+        learner.
+
+        Protocol
+        --------
+        1. Store the previous context and state before the GAMA transition.
+        2. Send the recommended action to GAMA in list format for batch compatibility.
+        3. GAMA applies the farmer decision rule, executes StepTask and CutTask,
+        and returns the new observation, sampled reward, and info dictionary.
+        4. Parse the GAMA response.
+        5. Recover the executed action from the info dictionary.
+        6. Compute the true mean reward from the local Python MDP using
+        the previous state, previous context, and executed action.
+        7. Update the internal Python-side state.
+
         Parameters
         ----------
         action : int
-            The action to execute.
- 
+            Action recommended by the RL learner.
+
         Returns
         -------
-        observation : tuple (int, int)
-            The contextual observation (c, s).
+        observation : tuple of int
+            The contextual observation ``(c, s)`` after the GAMA transition.
+
         reward : float
-            The reward sampled by GAMA.
-        done : bool
+            The stochastic reward sampled by GAMA from the reward distribution
+            associated with the executed action.
+
+        terminated : bool
             Whether the episode is terminated.
+
         truncated : bool
             Whether the episode is truncated.
+
         info : dict
-            Additional information including action_executed, was_cut, mean reward.
+            Additional information returned by GAMA and enriched on the Python
+            side. It includes, when available, ``action_recommended``,
+            ``action_executed``, ``complied``, ``was_cut``, and ``mean``.
+            The ``mean`` field is computed from the local MDP using the executed
+            action and is used for pseudo-regret computation.
         """
-        # Send action as a list (batch-ready format)
+        # Keep previous state/context before GAMA updates them.
+        prev_s = self.s
+        prev_c = self.c
+
+        # Send recommended action as a list for batch-ready compatibility.
         gama_action = [int(action)]
- 
-        # Execute step in GAMA
+
+        # Execute one step in GAMA.
         step_data = self.gama_client.execute_step(self.experiment_id, gama_action)
- 
-        # Compute true mean reward from local P/R BEFORE updating state
-        # (reward depends on state at time of action, not next state)
-        mean_reward = self.getMeanReward(self.s, action)
- 
-        # Parse GAMA response
+
+        # Parse GAMA response.
         observation, reward, terminated, truncated, info = self._parse_step_response(
             step_data
         )
- 
-        # Inject true mean reward from local model
+
+        # Recover the action actually executed by the farmer/GAMA.
+        # If no compliance layer is active, this defaults to the recommended action.
+        a_real = int(info.get("action_executed", action))
+
+        # Compute true mean reward from the local MDP before updating state.
+        # getMeanReward internally handles both agnostic and contextual rewards.
+        mean_reward = self.getMeanReward(prev_s, a_real, prev_c)
+
+        # Enrich info dictionary.
         info["mean"] = mean_reward
- 
-        # Update internal state
+        info["action_recommended"] = int(info.get("action_recommended", action))
+        info["action_executed"] = a_real
+
+        # Update internal state.
         self.s = observation[1]  # tree_age
-        self.c = observation[0]  # context (static, but read for consistency)
-        self.lastaction = action
+        self.c = observation[0]  # context
+        self.lastaction = a_real
         self.lastreward = reward
- 
-        # Resample context if dynamic
+
+        # Resample context if dynamic.
         if not self.c_is_static:
             self.c = categorical_sample(self.nu, self.np_random)
- 
+
         return observation, reward, terminated, truncated, info
 
  

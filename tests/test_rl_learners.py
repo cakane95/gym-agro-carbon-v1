@@ -8,10 +8,10 @@ Tests that each agent type can:
     4. Update via update(obs, action, reward, next_obs)
     5. Run a full mini-episode without crashing
 
-No regret computation, no multiple runs — just branchement validation.
+No regret computation, no multiple runs — just learner and gama link validation.
 
 Usage:
-    docker-compose exec gym-agent python tests/test_agent_branchement.py
+    docker-compose exec gym-agent python tests/test_rl_learners.py
 """
 
 import os
@@ -56,6 +56,9 @@ async def main():
     from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualIMED_RL import (
         GlobalIMEDRL,
         SemiLocalIMEDRL,
+    )
+    from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualUCRL3 import (
+        GlobalUCRL3,
     )
 
     # -------------------------------------------------------
@@ -198,8 +201,40 @@ async def main():
         env.close()
         sys.exit(1)
 
+        # -------------------------------------------------------
+    # Test 5: GlobalUCRL3
     # -------------------------------------------------------
-    # Test 5: All agents produce valid actions from same obs
+    try:
+        ucrl3_agent = GlobalUCRL3(
+            nS=nS,
+            nA=nA,
+            nC=nC,
+            delta=0.05,
+            K=-1,
+            max_reward=2.5,
+            name="GlobalUCRL3",
+        )
+
+        obs, info = env.reset(seed=350)
+        ucrl3_agent.reset(obs)
+
+        rewards = []
+        for t in range(n_steps):
+            action = ucrl3_agent.play(obs)
+            next_obs, reward, done, truncated, info = env.step(action)
+            ucrl3_agent.update(obs, action, reward, next_obs)
+            rewards.append(round(float(reward), 3))
+            obs = next_obs
+
+        log_test("5. GlobalUCRL3", "OK",
+                 f"rewards={rewards[:5]}...")
+    except Exception as e:
+        log_test("5. GlobalUCRL3", "FAILED", str(e))
+        env.close()
+        sys.exit(1)
+
+    # -------------------------------------------------------
+    # Test 6: All agents produce valid actions from same obs
     # -------------------------------------------------------
     try:
         obs, info = env.reset(seed=400)
@@ -209,6 +244,7 @@ async def main():
             "GlobalETC": etc_agent,
             "GlobalIMED-RL": imed_global,
             "SemiLocalIMED-RL": imed_semilocal,
+            "GlobalUCRL3": ucrl3_agent,
         }
 
         for name, agent in agents.items():
@@ -221,10 +257,10 @@ async def main():
                 f"{name}.play() returned action {action} out of range [0, {nA})"
             )
 
-        log_test("5. All agents produce valid actions", "OK",
+        log_test("6. All agents produce valid actions", "OK",
                  f"obs={obs}, all actions in [0, {nA})")
     except Exception as e:
-        log_test("5. All agents produce valid actions", "FAILED", str(e))
+        log_test("6. All agents produce valid actions", "FAILED", str(e))
         env.close()
         sys.exit(1)
 

@@ -1,3 +1,5 @@
+# Medium Compliance
+
 # Scenario 4: Hard / Stochastic
 # Tight reward gaps, high noise, and 20% tree destruction risk.
 # The most challenging configuration — stress test for all algorithms.
@@ -18,11 +20,11 @@ environment:
 gama:
   gaml_experiment_name: "gym_env"
   farmer:
-    household_size: 1
-    tree_knowledge: 1.0
-    base_compliance: 1.0
-    food_pressure_penalty: 0.0
-    tree_knowledge_bonus: 0.0
+    household_size: 5
+    tree_knowledge: 0.6
+    base_compliance: 0.75
+    food_pressure_penalty: 0.2
+    tree_knowledge_bonus: 0.1
     fallback_action: 3
 
 agents:

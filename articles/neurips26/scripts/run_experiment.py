@@ -34,11 +34,13 @@ from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualIMED_RL i
     GlobalIMEDRL,
     SemiLocalIMEDRL,
 )
+from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualUCRL3 import GlobalUCRL3
 
 AGENT_REGISTRY = {
     "GlobalETC": GlobalETC,
     "GlobalIMEDRL": GlobalIMEDRL,
     "SemiLocalIMEDRL": SemiLocalIMEDRL,
+    "GlobalUCRL3": GlobalUCRL3,
 }
 
 
@@ -83,6 +85,10 @@ def build_agents(agent_configs, nS, nA, nC, skeleton):
             params["nbr_actions"] = nA
             params["nbr_contexts"] = nC
             params["skeleton"] = skeleton
+        elif class_name == "GlobalUCRL3":
+            params["nS"] = nS
+            params["nA"] = nA
+            params["nC"] = nC
 
         agents.append((agent_class, params))
 

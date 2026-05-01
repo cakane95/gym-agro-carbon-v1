@@ -60,3 +60,9 @@ agents:
       max_iter: 3000
       epsilon: 1.0e-3
       max_reward: 2.5
+
+  - class: "GlobalUCRL3"
+    params:
+      delta: 0.05
+      K: -1
+      max_reward: 2.5
