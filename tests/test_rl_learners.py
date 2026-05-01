@@ -52,7 +52,7 @@ async def main():
     from src.contextual_stat_rl.learners.ContextualMDPs_discrete.Optimal.ContextualOptimalControl import (
         GlobalOpti_controller,
     )
-    from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ETC import GlobalETC4
+    from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ETC import GlobalETC
     from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualIMED_RL import (
         GlobalIMEDRL,
         SemiLocalIMEDRL,
@@ -101,10 +101,10 @@ async def main():
         sys.exit(1)
 
     # -------------------------------------------------------
-    # Test 2: GlobalETC4
+    # Test 2: GlobalETC
     # -------------------------------------------------------
     try:
-        etc_agent = GlobalETC4(
+        etc_agent = GlobalETC(
             nS=nS,
             nA=nA,
             nC=nC,
@@ -112,7 +112,8 @@ async def main():
             gamma=0.99,
             epsilon=1e-6,
             max_iter=1000,
-            name="GlobalETC4",
+            exploration_limit=10,
+            name="GlobalETC3",
         )
 
         obs, info = env.reset(seed=100)
@@ -126,7 +127,7 @@ async def main():
             rewards.append(round(float(reward), 3))
             obs = next_obs
 
-        log_test("2. GlobalETC4", "OK",
+        log_test("2. GlobalETC", "OK",
                  f"rewards={rewards[:5]}...")
     except Exception as e:
         log_test("2. GlobalETC4", "FAILED", str(e))
@@ -205,7 +206,7 @@ async def main():
 
         agents = {
             "Oracle": oracle,
-            "GlobalETC4": etc_agent,
+            "GlobalETC": etc_agent,
             "GlobalIMED-RL": imed_global,
             "SemiLocalIMED-RL": imed_semilocal,
         }

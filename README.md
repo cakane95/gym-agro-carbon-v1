@@ -2,13 +2,27 @@
 
 This project provides a framework to instantiate contextual Markov Decision Processes and connect them to agent-based models built in GAMA. The long-term goal is to build a reinforcement-learning recommender system that interacts with BDI farmer agents, who may choose to follow or ignore the recommended actions.
 
+A *contextual Markov decision process* is defined by the tuple
+
+$$
+\mathfrak{M} = \big(\mathcal{C}, \mathcal{S}, \mathcal{A}, H, \mathcal{M}\big),
+$$
+
+where $\mathcal{C}$ is a *finite* set of contexts, $\mathcal{S}$ is the state space shared across all contexts, $\mathcal{A}$ is the common action space, $H \in \mathbb{N}^\star$ is the finite horizon of an episode, and $\mathcal{M} : \mathcal{C} \to \{M^c\}_{c \in \mathcal{C}}$ is the *contextual mapping* that associates each context $c \in \mathcal{C}$ with an episodic MDP
+
+$$
+M^c = \big(\mathcal{S}, \mathcal{A}, H, P^c, r^c, \mu_0^c\big),
+$$
+
+where $P^c = \{P_h^c\}_{h=1}^H$ denotes the transition kernels, $r^c = \{r_h^c\}_{h=1}^H$ denotes the reward functions, and $\mu_0^c$ is the initial state distribution.
+
 ## GymAgroCarbon Environments
 
 GymAgroCarbon provides 12 contextual MDP environments for evaluating exploration strategies in agroforestry SOC management. Each environment models a Regenerative Natural Assistance (RNA) decision problem where an agent selects land-use practices (fallow, fertilized fallow, tree protection, baseline) on a parcel with heterogeneous soil contexts.
 
 ### Learning Scopes
 
-**Agnostic** — Rewards and transitions are identical across all contexts. The context is observed but carries no information. Algorithms that pool data across contexts are expected to perform best.
+**Agnostic (classical MDP)** — Rewards and transitions are identical across all contexts. The context is observed but carries no information. Algorithms that pool data across contexts are expected to perform best.
 
 **Reward-Contextual** — Rewards depend on the soil context (via per-context multipliers on base means). Transitions remain context-independent. Algorithms must learn different reward structures per context to achieve optimal regret.
 
@@ -30,6 +44,32 @@ GymAgroCarbon provides 12 contextual MDP environments for evaluating exploration
 | **Agnostic** | `agnostic-easy-det` | `agnostic-easy-stoch` | `agnostic-hard-det` | `agnostic-hard-stoch` |
 | **Reward-Contextual** | `reward-ctx-easy-det` | `reward-ctx-easy-stoch` | `reward-ctx-hard-det` | `reward-ctx-hard-stoch` |
 | **Fully-Contextual** | `full-ctx-easy-det` | `full-ctx-easy-stoch` | `full-ctx-hard-det` | `full-ctx-hard-stoch` |
+
+## Reward Design
+
+The environment models the seasonal decision of a Sahelian parcel manager choosing among four land-management practices: simple fallow (`fallow`), fertilized fallow with organic matter inputs (`fert_fallow`), farmer-managed natural regeneration (`tree`/RNA), and conventional cropping (`baseline`). Each practice provides a different immediate reward, with conventional cropping being the most productive in the short term.
+
+At the same time, the presence of a mature tree on the parcel, typically a *Faidherbia albida*, can improve future yields. This effect is not uniform across practices: cropping under the tree canopy benefits the most from improved soil fertility and shading, while simple fallow benefits only marginally. This is represented by an age-dependent bonus modulated by an action-specific coefficient.
+
+In the agnostic reward setting, the mean reward is defined as:
+
+$$
+R(s,a) = \text{base\_means}[a] + \text{age\_bonus}(s) \times \text{action\_bonus\_scales}[a].
+$$
+
+Here, `base_means[a]` captures the immediate productivity of action `a`, while `age_bonus(s)` increases with the tree-age state `s`. The vector `action_bonus_scales` controls how much each practice benefits from tree maturity. For example:
+
+```python
+action_bonus_scales = [0.2, 0.4, 0.3, 1.0]
+```
+
+With this design, `baseline` receives the full tree-age bonus, while `fallow` receives only a small fraction of it. This creates a temporal trade-off: the `tree` action is the only action that initiates tree growth, but it has a lower immediate reward than `baseline`. The agent must therefore accept a short-term opportunity cost in order to reach a future state where the mature tree significantly improves returns.
+
+For example, at state s=0, where no tree is present, baseline has an immediate mean reward of 1.2, while tree has a mean reward of 0.867. However, at maturity (s=6 when nS=7), the age bonus reaches 0.5, and baseline obtains:
+
+$$1.2+0.5×1.0=1.70.$$
+
+The optimal strategy should therefore learn when it is worth planting early and then exploiting baseline once the tree is mature. On a short horizon such as H=20, this trade-off is especially challenging because the tree requires several seasons to mature and may be destroyed with probability p_cut, forcing the process to restart.
 
 ## Dockerized Python–GAMA Headless Architecture
 
@@ -175,6 +215,17 @@ docker-compose exec gym-agent python tests/test_mini_experiment.py
 
 # 5. Run a minimal experiment (reward-contextual, 20 steps, 5 replicas)
 docker-compose exec gym-agent python tests/test_mini_contextual_reward_experiment.py
+```
+
+### Run Experiments
+
+```bash
+# Run Full compliance expermiments
+
+# Scenario 1 : large gaps, deterministic tree growth
+docker-compose exec gym-agent python articles/neurips26/scripts/run_experiment.py articles/neurips26/configs/full_compliance/scenario_1_easy_det.yaml
+
+
 ```
 
 ### Shutdown

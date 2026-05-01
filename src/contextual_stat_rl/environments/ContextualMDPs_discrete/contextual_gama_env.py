@@ -224,51 +224,82 @@ class ContextualGamaEnv(ContextualDiscreteMDP):
     def _parse_step_response(self, step_data):
         """
         Parse the GAMA step response into the contextual MDP format.
- 
+
         GAMA returns:
-            State: [[c, s]]  (list of [context, tree_age] per parcel)
-            Reward: float (total reward)
+            State: [[c, s]]
+            Reward: float
             Terminated: bool
             Truncated: bool
-            Info: map with parcel_info, actions_executed, etc.
- 
+            Info: map with parcel_info, actions_recommended, actions_executed, etc.
+
         For the sequential case (1 parcel), we extract the first element.
- 
-        Returns
-        -------
-        observation : tuple (int, int)
-        reward : float
-        terminated : bool
-        truncated : bool
-        info : dict
         """
         # Extract state: [[c, s]] -> (c, s)
         raw_state = step_data["State"]
         if isinstance(raw_state, list) and len(raw_state) > 0:
-            parcel_obs = raw_state[0]  # First (and only) parcel
+            parcel_obs = raw_state[0]
             c = int(parcel_obs[0])
             s = int(parcel_obs[1])
         else:
             raise ValueError(f"Unexpected state format from GAMA: {raw_state}")
- 
+
         observation = (c, s)
         reward = float(step_data["Reward"])
         terminated = bool(step_data["Terminated"])
         truncated = bool(step_data["Truncated"])
- 
-        # Build info dict compatible with existing agents
+
         raw_info = step_data.get("Info", {})
         info = {}
- 
-        # Propagate GAMA-specific info if available
+
         if isinstance(raw_info, dict):
+            # Top-level action lists
+            if "actions_recommended" in raw_info:
+                info["action_recommended"] = int(raw_info["actions_recommended"][0])
+
             if "actions_executed" in raw_info:
-                info["action_executed"] = raw_info["actions_executed"][0]
+                info["action_executed"] = int(raw_info["actions_executed"][0])
+
             if "cut_flags" in raw_info:
-                info["was_cut"] = raw_info["cut_flags"][0]
+                info["was_cut"] = bool(raw_info["cut_flags"][0])
+
             if "parcel_rewards" in raw_info:
-                info["parcel_reward"] = raw_info["parcel_rewards"][0]
- 
+                info["parcel_reward"] = float(raw_info["parcel_rewards"][0])
+
+            # Farmer-level compliance info
+            if "compliance_probability" in raw_info:
+                info["compliance_probability"] = float(raw_info["compliance_probability"])
+
+            if "farmer_complied" in raw_info:
+                info["farmer_complied"] = bool(raw_info["farmer_complied"])
+
+            if "household_size" in raw_info:
+                info["household_size"] = int(raw_info["household_size"])
+
+            if "tree_knowledge" in raw_info:
+                info["tree_knowledge"] = float(raw_info["tree_knowledge"])
+
+            # Parcel-level info, if available
+            if "parcel_info" in raw_info and len(raw_info["parcel_info"]) > 0:
+                pinfo = raw_info["parcel_info"][0]
+
+                if isinstance(pinfo, dict):
+                    info["parcel_info"] = pinfo
+
+                    if "action_recommended" in pinfo:
+                        info["action_recommended"] = int(pinfo["action_recommended"])
+
+                    if "action_executed" in pinfo:
+                        info["action_executed"] = int(pinfo["action_executed"])
+
+                    if "complied" in pinfo:
+                        info["complied"] = bool(pinfo["complied"])
+
+                    if "reward" in pinfo:
+                        info["parcel_reward"] = float(pinfo["reward"])
+
+                    if "was_cut" in pinfo:
+                        info["was_cut"] = bool(pinfo["was_cut"])
+
         return observation, reward, terminated, truncated, info
  
     def close(self):

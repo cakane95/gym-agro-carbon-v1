@@ -16,8 +16,29 @@ from src.contextual_stat_rl.environments.ContextualMDPs_discrete.factories.agroc
     _build_context_scales,
     build_tree_skeleton,
     build_action_names,
-    _build_base_means  # Make sure this is imported to send to GAMA!
+    _build_action_bonus_scales,
+    _build_base_means
 )
+
+def _build_compliance_params(
+    household_size=1,
+    tree_knowledge=1.0,
+    base_compliance=1.0,
+    food_pressure_penalty=0.0,
+    tree_knowledge_bonus=0.0,
+    fallback_action=3,
+):
+    """
+    Build GAMA parameters controlling the Farmer BDI compliance behavior.
+    """
+    return [
+        {"name": "Farmer Household Size", "type": "int", "value": household_size},
+        {"name": "Farmer Tree Knowledge", "type": "float", "value": tree_knowledge},
+        {"name": "Farmer Base Compliance", "type": "float", "value": base_compliance},
+        {"name": "Farmer Food Pressure Penalty", "type": "float", "value": food_pressure_penalty},
+        {"name": "Farmer Tree Knowledge Bonus", "type": "float", "value": tree_knowledge_bonus},
+        {"name": "Farmer Fallback Action", "type": "int", "value": fallback_action},
+    ]
 
 def _build_gaml_parameters(
     nS,
@@ -27,6 +48,7 @@ def _build_gaml_parameters(
     p_cut,
     difficulty,
     r_is_contextual=False,
+    compliance_params=None,
 ):
     """
     Translates Python environment parameters into the format expected by GAMA.
@@ -34,18 +56,19 @@ def _build_gaml_parameters(
     """
     base_means = _build_base_means(nA, difficulty)
     context_scales = _build_context_scales(nC, difficulty)
+    action_bonus_scales = _build_action_bonus_scales(nA, difficulty)
 
     age_bonus_max = 0.5 if difficulty == "easy" else 0.2
     growth_rate = 3.0 if difficulty == "easy" else 2.0
     noise = 0.05 if difficulty == "easy" else 0.2
 
-    return [
+    params = [
         {"name": "Number of States", "type": "int", "value": nS},
         {"name": "Number of Actions", "type": "int", "value": nA},
         {"name": "Number of Contexts", "type": "int", "value": nC},
         {"name": "Trigger Action", "type": "int", "value": trigger_action},
         {"name": "Cut Probability", "type": "float", "value": p_cut},
-
+        
         {"name": "Age Bonus Max", "type": "float", "value": age_bonus_max},
         {"name": "Growth Rate", "type": "float", "value": growth_rate},
         {"name": "Reward Noise", "type": "float", "value": noise},
@@ -53,11 +76,20 @@ def _build_gaml_parameters(
 
         {"name": "Reward Is Contextual", "type": "bool", "value": r_is_contextual},
         {"name": "Context Scales", "type": "list", "value": context_scales},
+        {"name": "Action Bonus Scales", "type": "list", "value": action_bonus_scales},
     ]
+
+    if compliance_params is None:
+        compliance_params = {}
+
+    params.extend(_build_compliance_params(**compliance_params))
+
+    return params
 
 def build_gama_agnostic_agrocarbon_config(
     nS=4, nA=4, nC=3, trigger_action=2,
     p_cut=0.0, difficulty="easy",
+    compliance_params=None,
     gaml_experiment_path=None,
     gaml_experiment_name="gym_env",
     gama_ip_address=None,
@@ -72,7 +104,7 @@ def build_gama_agnostic_agrocarbon_config(
     if gama_port is None:
         gama_port = int(os.environ.get("GAMA_PORT", 6868))
 
-    gaml_params = _build_gaml_parameters(nS, nA, nC, trigger_action, p_cut, difficulty, r_is_contextual=False)
+    gaml_params = _build_gaml_parameters(nS, nA, nC, trigger_action, p_cut, difficulty, r_is_contextual=False, compliance_params=compliance_params)
 
     return {
         # --- MDP kwargs ---
@@ -102,6 +134,7 @@ def build_gama_agnostic_agrocarbon_config(
 def build_gama_reward_contextual_agrocarbon_config(
     nS=4, nA=4, nC=3, trigger_action=2,
     p_cut=0.0, difficulty="easy",
+    compliance_params=None,
     gaml_experiment_path=None,
     gaml_experiment_name="gym_env",
     gama_ip_address=None,
@@ -115,7 +148,7 @@ def build_gama_reward_contextual_agrocarbon_config(
     if gama_port is None:
         gama_port = int(os.environ.get("GAMA_PORT", 6868))
 
-    gaml_params = _build_gaml_parameters(nS, nA, nC, trigger_action, p_cut, difficulty, r_is_contextual=True)
+    gaml_params = _build_gaml_parameters(nS, nA, nC, trigger_action, p_cut, difficulty, r_is_contextual=True, compliance_params=compliance_params)
 
     return {
         # --- MDP kwargs ---

@@ -22,13 +22,100 @@ species Actor {
 }
 
 /*
- * The Farmer is the owner/operator of a parcel. Currently passive 
- * (executes the RL recommendation directly). Will become a BDI agent 
- * that can override the recommended action based on household constraints.
+ * Farmer agent with a minimal BDI architecture.
+ *
+ * The farmer receives an RL recommendation but may override it depending on:
+ * - food pressure, proxied by household size;
+ * - knowledge of tree benefits.
+ *
+ * The BDI part is intentionally simple:
+ * - beliefs represent household pressure and knowledge of tree benefits;
+ * - the action decide_action computes compliance from these beliefs;
+ * - the returned action is the action actually executed in the environment.
  */
-species Farmer parent: Actor {
-	Parcel my_parcel;
-	int household_size <- 1;
+species Farmer parent: Actor control: simple_bdi {
+
+    Parcel my_parcel;
+
+    int household_size <- 1;
+	float tree_knowledge <- 1.0;
+	float base_compliance <- 1.0;
+	float food_pressure_penalty <- 0.0;
+	float tree_knowledge_bonus <- 0.0;
+	int fallback_action <- 3;
+
+    float compliance_probability <- 1.0;
+    bool complied <- true;
+
+    // Beliefs
+    predicate food_pressure <- new_predicate("food_pressure");
+    predicate tree_benefit <- new_predicate("tree_benefit");
+
+    init {
+        do update_beliefs;
+    }
+
+    /*
+     * Update simple beliefs from farmer attributes.
+     */
+    action update_beliefs {
+
+        if (household_size > 5) {
+            if (!has_belief(food_pressure)) {
+                do add_belief(food_pressure);
+            }
+        } else {
+            if (has_belief(food_pressure)) {
+                do remove_belief(food_pressure);
+            }
+        }
+
+        if (tree_knowledge > 0.7) {
+            if (!has_belief(tree_benefit)) {
+                do add_belief(tree_benefit);
+            }
+        } else {
+            if (has_belief(tree_benefit)) {
+                do remove_belief(tree_benefit);
+            }
+        }
+    }
+
+    /*
+     * Decide the real action executed by the farmer.
+     *
+     * If the recommendation is baseline, the farmer accepts it.
+     * Otherwise, compliance depends on BDI beliefs.
+     */
+    action decide_action(int a_recommended) type: int {
+
+        do update_beliefs;
+
+        compliance_probability <- base_compliance;
+
+        if (has_belief(food_pressure)) {
+            compliance_probability <- compliance_probability - food_pressure_penalty;
+        }
+
+        if (has_belief(tree_benefit)) {
+            compliance_probability <- compliance_probability + tree_knowledge_bonus;
+        }
+
+        compliance_probability <- max(0.0, min(1.0, compliance_probability));
+
+        if (a_recommended = fallback_action) {
+            complied <- true;
+            return a_recommended;
+        }
+
+        if (rnd(1.0) <= compliance_probability) {
+            complied <- true;
+            return a_recommended;
+        } else {
+            complied <- false;
+            return fallback_action;
+        }
+    }
 }
 
 /*

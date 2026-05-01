@@ -18,7 +18,7 @@ from src.contextual_stat_rl.experiments.sequential_experiment import (
     build_oracle_env,
 )
 
-from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ETC import GlobalETC4
+from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ETC import GlobalETC
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualIMED_RL import GlobalIMEDRL, SemiLocalIMEDRL
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.Optimal import ContextualOptimalControl as opt
 from src.contextual_stat_rl.environments.gama_register import make_gama
@@ -34,7 +34,7 @@ async def main():
     print("Mini Contextual Reward Experiment: GAMA + RL Agents")
     print(f"  GAML:         {gaml_path}")
     print(f"  Horizon:      20")
-    print(f"  Replicates:   5")
+    print(f"  Replicates:   10")
     print("=" * 60)
 
     # 1. Register and create the environment
@@ -53,7 +53,7 @@ async def main():
     # 2. Define agents (same as run_basic_agrocarbon.py)
     agents = [
         (
-            GlobalETC4,
+            GlobalETC,
             {
                 "nS": nS,
                 "nA": nA,
@@ -62,7 +62,7 @@ async def main():
                 "gamma": 0.99,
                 "epsilon": 1e-6,
                 "max_iter": 1000,
-                "name": "GlobalETC4",
+                "exploration_limit":10,
             },
         ),
         (
@@ -108,7 +108,7 @@ async def main():
             agents,
             oracle,
             timeHorizon=20,
-            nbReplicates=100,
+            nbReplicates=10,
             root_folder=root_folder,
             oracle_env=oracle_env,
         )

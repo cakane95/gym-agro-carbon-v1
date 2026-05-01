@@ -40,6 +40,7 @@ global {
     // =============================================
 
     list<float> base_means <- [0.2, 0.533, 0.867, 1.2];
+    list<float> action_bonus_scales <- [0.2, 0.4, 0.3, 1.0];
     float reward_noise <- 0.05;
     float age_bonus_max <- 0.5;
     float growth_rate <- 3.0;
@@ -51,6 +52,17 @@ global {
 
     list<float> context_dist <- [0.4, 0.4, 0.2];
     list<float> context_scales <- [1.0, 1.0, 1.0];
+    
+    // ============================================
+    // --- BDI Farmer Agents ---
+    // ============================================
+    
+    int farmer_household_size <- 1;
+	float farmer_tree_knowledge <- 1.0;
+	float farmer_base_compliance <- 1.0;
+	float farmer_food_pressure_penalty <- 0.0;
+	float farmer_tree_knowledge_bonus <- 0.0;
+	int farmer_fallback_action <- 3;
     
     // =============================================
     // --- GUI / Testing Parameters ---
@@ -142,8 +154,14 @@ global {
         // --- Create Farmer ---
 
         create Farmer number: 1 returns: farmers {
-            id <- "Farmer_1";
-        }
+		    id <- "Farmer_1";
+		    household_size <- world.farmer_household_size;
+		    tree_knowledge <- world.farmer_tree_knowledge;
+		    base_compliance <- world.farmer_base_compliance;
+		    food_pressure_penalty <- world.farmer_food_pressure_penalty;
+		    tree_knowledge_bonus <- world.farmer_tree_knowledge_bonus;
+		    fallback_action <- world.farmer_fallback_action;
+		}
         farmer <- first(farmers);
 
         // --- Initialize parcels with internal defaults ---
@@ -213,33 +231,36 @@ global {
     // =============================================
 
     action build_parcel_info(
-        list<int> actions_executed,
-        list<float> rewards,
-        list<bool> cut_flags
-    ) type: list<unknown> {
-
-        list<unknown> parcel_info <- [];
-        int idx <- 0;
-
-        loop cell over: Parcel {
-
-            map<string, unknown> one_info <- [
-                "parcel_index"::idx,
-                "context"::cell.soil_type_id,
-                "tree_age"::cell.new_tree_age,
-                "action_executed"::actions_executed[idx],
-                "reward"::rewards[idx],
-                "was_cut"::cut_flags[idx],
-                "yield"::cell.yield,
-                "C_input"::cell.C_input
-            ];
-
-            parcel_info <- parcel_info + [one_info];
-            idx <- idx + 1;
-        }
-
-        return parcel_info;
-    }
+	    list<int> actions_recommended,
+	    list<int> actions_executed,
+	    list<float> rewards,
+	    list<bool> cut_flags
+	) type: list<unknown> {
+	
+	    list<unknown> parcel_info <- [];
+	    int idx <- 0;
+	
+	    loop cell over: Parcel {
+	
+	        map<string, unknown> one_info <- [
+	            "parcel_index"::idx,
+	            "context"::cell.soil_type_id,
+	            "tree_age"::cell.new_tree_age,
+	            "action_recommended"::actions_recommended[idx],
+	            "action_executed"::actions_executed[idx],
+	            "complied"::(actions_recommended[idx] = actions_executed[idx]),
+	            "reward"::rewards[idx],
+	            "was_cut"::cut_flags[idx],
+	            "yield"::cell.yield,
+	            "C_input"::cell.C_input
+	        ];
+	
+	        parcel_info <- parcel_info + [one_info];
+	        idx <- idx + 1;
+	    }
+	
+	    return parcel_info;
+	}
 
     // =============================================
     // --- Reset Reflex Triggered by Python ---
@@ -358,6 +379,10 @@ global {
 
             int a_real <- a_recommended;
 
+			ask farmer {
+			    a_real <- decide_action(a_recommended);
+			}
+
             if (a_real < 0) {
                 a_real <- 0;
             }
@@ -374,6 +399,7 @@ global {
 				    a_real,
 				    world.base_means,
 				    world.context_scales,
+				    world.action_bonus_scales,
 				    world.r_is_contextual,
 				    world.reward_noise,
 				    world.age_bonus_max,
@@ -401,6 +427,7 @@ global {
         list<unknown> new_state <- build_observation();
 
         list<unknown> parcel_info <- build_parcel_info(
+        	recommended_actions,
             actions_executed,
             parcel_rewards,
             cut_flags
@@ -412,6 +439,11 @@ global {
             "cycle"::cycle,
             "n_parcels"::length(Parcel),
             "actions_executed"::actions_executed,
+            "actions_recommended"::recommended_actions,
+			"compliance_probability"::farmer.compliance_probability,
+			"farmer_complied"::farmer.complied,
+			"household_size"::farmer.household_size,
+			"tree_knowledge"::farmer.tree_knowledge,
             "parcel_rewards"::parcel_rewards,
             "cut_flags"::cut_flags,
             "parcel_info"::parcel_info
@@ -512,6 +544,7 @@ experiment gym_env type: gui {
 	parameter "Forced Seed" var: forced_seed <- -1.0;
 
     parameter "Server Port" var: gama_server_port;
+    parameter "Action Bonus Scales" var: action_bonus_scales <- [0.2, 0.4, 0.3, 1.0];
 
     parameter "Number of States" var: nS;
     parameter "Number of Actions" var: nA;
@@ -525,6 +558,13 @@ experiment gym_env type: gui {
     parameter "Age Bonus Max" var: age_bonus_max;
     parameter "Growth Rate" var: growth_rate;
     parameter "Reward Noise" var: reward_noise;
+    
+    parameter "Farmer Household Size" var: farmer_household_size <- 1;
+	parameter "Farmer Tree Knowledge" var: farmer_tree_knowledge <- 1.0;
+	parameter "Farmer Base Compliance" var: farmer_base_compliance <- 1.0;
+	parameter "Farmer Food Pressure Penalty" var: farmer_food_pressure_penalty <- 0.0;
+	parameter "Farmer Tree Knowledge Bonus" var: farmer_tree_knowledge_bonus <- 0.0;
+	parameter "Farmer Fallback Action" var: farmer_fallback_action <- 3;
 
     parameter "Default Action" var: default_action;
     parameter "Max GUI Steps" var: max_gui_steps;

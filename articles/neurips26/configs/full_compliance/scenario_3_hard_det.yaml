@@ -1,0 +1,60 @@
+# Scenario 3: Hard / Deterministic
+# Tight reward gaps, high noise, no tree destruction risk.
+# Requires extensive exploration to distinguish actions.
+
+experiment:
+  name: "gama-agrocarbon-reward-contextual"
+  timeHorizon: 20
+  nbReplicates: 100
+
+environment:
+  nS: 8
+  nA: 4
+  nC: 3
+  trigger_action: 2
+  p_cut: 0.0
+  difficulty: "hard"
+
+gama:
+  gaml_experiment_name: "gym_env"
+  farmer:
+    household_size: 1
+    tree_knowledge: 1.0
+    base_compliance: 1.0
+    food_pressure_penalty: 0.0
+    tree_knowledge_bonus: 0.0
+    fallback_action: 3
+
+agents:
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 3
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 5
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 10
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalIMEDRL"
+    params:
+      max_iter: 3000
+      epsilon: 1.0e-3
+      max_reward: 1.5
+
+  - class: "SemiLocalIMEDRL"
+    params:
+      max_iter: 3000
+      epsilon: 1.0e-3
+      max_reward: 1.5

@@ -64,6 +64,7 @@ species StepTask parent: Task {
     action execute_on(Parcel cell, int action_id,
                       list<float> base_means,
                       list<float> context_scales,
+                      list<float> action_bonus_scales,
                       bool r_is_contextual,
                       float noise,
                       float age_bonus_max,
@@ -74,19 +75,19 @@ species StepTask parent: Task {
         int s_current <- cell.new_tree_age;
 
         // --- 1. Compute reward R(s_current, a_real) or R(c, s_current, a_real) ---
-        float base_mean <- base_means[action_id];
-        float age_bonus <- compute_age_bonus(s_current, nS, age_bonus_max, growth_rate);
-
-        float reward_mean;
-        if (r_is_contextual) {
-            int c <- cell.soil_type_id;
-            float scale <- context_scales[c];
-            reward_mean <- base_mean * scale + age_bonus;
-        } else {
-            reward_mean <- base_mean + age_bonus;
-        }
-
-        float reward <- gauss(reward_mean, noise);
+		float base_mean <- base_means[action_id];
+		float age_bonus <- compute_age_bonus(s_current, nS, age_bonus_max, growth_rate);
+		float action_bonus_scale <- action_bonus_scales[action_id];
+		
+		float reward_mean;
+		if (r_is_contextual) {
+		    float scale <- context_scales[cell.soil_type_id];
+		    reward_mean <- base_mean * scale + age_bonus * action_bonus_scale;
+		} else {
+		    reward_mean <- base_mean + age_bonus * action_bonus_scale;
+		}
+		
+		float reward <- gauss(reward_mean, noise);
 
         // --- 2. State transition ---
         int s_next;

@@ -97,37 +97,66 @@ def _build_context_scales(nC, difficulty):
 def build_agnostic_reward_matrix(nS, nA, nC, difficulty="easy"):
     """R[s][a] — same reward regardless of context."""
     base_means = _build_base_means(nA, difficulty)
+    action_bonus_scales = _build_action_bonus_scales(nA, difficulty)
+
     age_bonus_max = 0.5 if difficulty == "easy" else 0.2
     growth_rate = 3.0 if difficulty == "easy" else 2.0
     noise = 0.05 if difficulty == "easy" else 0.2
-    
+
     R = {}
     for s in range(nS):
         R[s] = {}
         bonus = _age_bonus(s, nS, age_bonus_max, growth_rate)
+
         for a in range(nA):
-            mean = base_means[a] + bonus
+            mean = base_means[a] + bonus * action_bonus_scales[a]
             R[s][a] = stat.norm(mean, noise)
+
     return R
 
+def _build_action_bonus_scales(nA, difficulty):
+    """
+    Generate per-action multipliers for the tree-age bonus.
+
+    The goal is to make the tree state valuable mainly because it improves
+    some downstream practices, especially the baseline/cropping action.
+    """
+    if difficulty == "easy":
+        default_scales = [0.2, 0.4, 0.3, 1.0]
+    else:
+        default_scales = [0.1, 0.25, 0.2, 0.6]
+
+    if nA <= len(default_scales):
+        return default_scales[:nA]
+
+    # If more actions are added later, extend with neutral moderate values.
+    return default_scales + [0.5] * (nA - len(default_scales))
 
 def build_contextual_reward_matrix(nS, nA, nC, difficulty="easy"):
     """R[c][s][a] — rewards vary by context."""
     base_means = _build_base_means(nA, difficulty)
     context_scales = _build_context_scales(nC, difficulty)
+    action_bonus_scales = _build_action_bonus_scales(nA, difficulty)
+
     age_bonus_max = 0.5 if difficulty == "easy" else 0.2
     growth_rate = 3.0 if difficulty == "easy" else 2.0
     noise = 0.05 if difficulty == "easy" else 0.2
-    
+
     R = {}
     for c in range(nC):
         R[c] = {}
+
         for s in range(nS):
             R[c][s] = {}
             bonus = _age_bonus(s, nS, age_bonus_max, growth_rate)
+
             for a in range(nA):
-                mean = base_means[a] * context_scales[c] + bonus
+                mean = (
+                    base_means[a] * context_scales[c]
+                    + bonus * action_bonus_scales[a]
+                )
                 R[c][s][a] = stat.norm(mean, noise)
+
     return R
 
 def build_initial_state_dist(nS, nC, start_state=0):

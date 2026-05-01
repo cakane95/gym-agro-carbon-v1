@@ -162,12 +162,12 @@ class ETC(ContextualAgent):
     def build_committed_policy(self):
         raise NotImplementedError("build_committed_policy() must be implemented by subclasses.")
 
-class GlobalETC4(ETC):
+class GlobalETC(ETC):
     """
-    Explore-Then-Commit agent (Global scope) that explores for exactly 4 timesteps.
+    Explore-Then-Commit agent (Global scope) that explores for exactly exploration_limit timesteps.
     
     At each exploration step, it chooses the least played valid action in the 
-    current state. After 4 steps, it computes the optimal policy via Value 
+    current state. After exploration_limit steps, it computes the optimal policy via Value 
     Iteration on the empirical MDP and commits to it.
 
     Attributes
@@ -193,24 +193,14 @@ class GlobalETC4(ETC):
         Returns the action dictated by the committed policy for the current state.
     """
     def __init__(
-        self, 
-        nS, 
-        nA, 
-        nC, 
-        skeleton=None, 
-        gamma=0.99, 
-        epsilon=1e-3, 
-        max_iter=1000, 
-        name="GlobalETC4"
+        self, nS, nA, nC, skeleton=None,
+        gamma=0.99, epsilon=1e-3, max_iter=1000,
+        exploration_limit=4, name=None,
     ):
-        super().__init__(
-            nS, nA, nC, 
-            skeleton=skeleton, 
-            learning_scope="global", 
-            name=name
-        )
-        
-        self.exploration_limit = 4
+        if name is None:
+            name = f"GlobalETC{exploration_limit}"
+        super().__init__(nS, nA, nC, skeleton=skeleton, learning_scope="global", name=name)
+        self.exploration_limit = exploration_limit
         self.gamma = gamma
         self.epsilon = epsilon
         self.max_iter = max_iter
@@ -263,7 +253,9 @@ class GlobalETC4(ETC):
             for a in self.skeleton[s]:
                 Q_s[a] = self.rewards[s, a] + self.gamma * np.dot(self.transitions[s, a], V)
             
-            self.committed_policy[s] = np.argmax(Q_s)
+            max_q = np.max(Q_s[Q_s > -np.inf])
+            best_actions = np.where(Q_s == max_q)[0]
+            self.committed_policy[s] = np.random.choice(best_actions)
 
     def commit(self, observation):
         """
