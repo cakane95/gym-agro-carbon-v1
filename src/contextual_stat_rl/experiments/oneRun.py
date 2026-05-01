@@ -22,18 +22,20 @@ def dump(values, filename, tag, root_folder):
 def one_xp_run_with_actions_and_dump(env, learner, timeHorizon, root_folder):
     """
     Run one episode, collecting cumulative mean rewards, action counts,
-    and action counts over time.
+    action counts over time, and compliance records.
 
     Tracks:
-    - action_counts[c, a]: how many times action a was played in context c
-    - time_action_counts[t, a]: how many times action a was played at timestep t
+    - action_counts[c, a]: how many times action a was recommended in context c
+    - time_action_counts[t, a]: how many times action a was recommended at timestep t
+    - compliance_records: one row per timestep for compliance analysis
 
     Returns
     -------
-    tuple (str, np.ndarray, np.ndarray)
+    tuple
         - filename: path to the dumped cumMeans file
         - action_counts: array of shape (nC, nA)
         - time_action_counts: array of shape (timeHorizon, nA)
+        - compliance_records: list[dict]
     """
     observation, info = env.reset()
     learner.reset(observation)
@@ -48,6 +50,7 @@ def one_xp_run_with_actions_and_dump(env, learner, timeHorizon, root_folder):
 
     action_counts = np.zeros((nC, nA), dtype=int)
     time_action_counts = np.zeros((timeHorizon, nA), dtype=int)
+    compliance_records = []
 
     print(f"[Info] New initialization of {learner.name()} for environment {env.name}")
 
@@ -55,12 +58,14 @@ def one_xp_run_with_actions_and_dump(env, learner, timeHorizon, root_folder):
         state = observation
         action = learner.play(state)
 
-        # Track the action in its context
         if isinstance(state, tuple) and len(state) == 2:
-            c = state[0]
+            c = int(state[0])
+            s = int(state[1])
         else:
             c = 0
+            s = None
 
+        # Here action is the recommendation sent by the RL learner.
         action_counts[c, action] += 1
         time_action_counts[t, action] += 1
 
@@ -76,6 +81,25 @@ def one_xp_run_with_actions_and_dump(env, learner, timeHorizon, root_folder):
         cumrewards.append(cumreward)
         cummeans.append(cummean)
 
+        action_recommended = info.get("action_recommended", action)
+        action_executed = info.get("action_executed", action)
+        complied = info.get("complied", action_recommended == action_executed)
+
+        compliance_records.append({
+            "timestep": t,
+            "context": c,
+            "state": s,
+            "action_recommended": int(action_recommended),
+            "action_executed": int(action_executed),
+            "complied": bool(complied),
+            "reward": float(reward),
+            "mean": float(info.get("mean", reward)),
+            "was_cut": bool(info.get("was_cut", False)),
+            "compliance_probability": info.get("compliance_probability", None),
+            "household_size": info.get("household_size", None),
+            "tree_knowledge": info.get("tree_knowledge", None),
+        })
+
         if done:
             print(f"Episode finished after {t + 1} timesteps")
             observation, info = env.reset()
@@ -84,4 +108,4 @@ def one_xp_run_with_actions_and_dump(env, learner, timeHorizon, root_folder):
     tag = env.name + "_" + learner.name() + "_" + str(timeHorizon) + "_" + str(time.time())
     filename = dump(cummeans, "cumMeans", tag, root_folder)
 
-    return filename, action_counts, time_action_counts
+    return filename, action_counts, time_action_counts, compliance_records

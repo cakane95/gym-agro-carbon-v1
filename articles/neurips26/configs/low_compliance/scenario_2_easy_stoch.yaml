@@ -1,0 +1,62 @@
+# Low Compliance
+
+# Scenario 2: Easy / Stochastic
+# Large reward gaps, low noise, but 20% tree destruction risk.
+# Tests robustness: investment in RNA can be lost at any step.
+
+experiment:
+  name: "gama-agrocarbon-reward-contextual"
+  timeHorizon: 20
+  nbReplicates: 100
+
+environment:
+  nS: 8
+  nA: 4
+  nC: 3
+  trigger_action: 2
+  p_cut: 0.15
+  difficulty: "easy"
+
+gama:
+  gaml_experiment_name: "gym_env"
+  farmer:
+    household_size: 8
+    tree_knowledge: 0.2
+    base_compliance: 0.55
+    food_pressure_penalty: 0.35
+    tree_knowledge_bonus: 0.0
+    fallback_action: 3
+
+agents:
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 3
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 5
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 10
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalIMEDRL"
+    params:
+      max_iter: 3000
+      epsilon: 1.0e-3
+      max_reward: 2.5
+
+  - class: "SemiLocalIMEDRL"
+    params:
+      max_iter: 3000
+      epsilon: 1.0e-3
+      max_reward: 2.5

@@ -14,6 +14,7 @@ Collects both cumulative regret and action distributions for analysis.
 import os
 import copy
 import time
+import csv
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -95,6 +96,38 @@ def oracle_contextual_with_dump(oracle_env, oracle, timeHorizon, nbReplicates, r
     return filename
 
 
+def write_compliance_csv(records, output_path):
+    """Write compliance records to a single CSV file."""
+    if not records:
+        print("[CSV] No compliance records to write.")
+        return
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    fieldnames = [
+        "agent",
+        "replicate",
+        "timestep",
+        "context",
+        "state",
+        "action_recommended",
+        "action_executed",
+        "complied",
+        "reward",
+        "mean",
+        "was_cut",
+        "compliance_probability",
+        "household_size",
+        "tree_knowledge",
+    ]
+
+    with open(output_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(records)
+
+    print(f"[CSV] Compliance data saved to {output_path}")
+
 def sequentialRuns(env, learner, nbReplicates, timeHorizon, root_folder):
     """
     Run multiple replicates sequentially, collecting rewards and action counts.
@@ -105,30 +138,52 @@ def sequentialRuns(env, learner, nbReplicates, timeHorizon, root_folder):
         - cumRewardFiles: list of filenames for cumMeans dumps
         - meanElapsedTime: average time per replicate
         - avg_action_counts: mean action counts across replicates, shape (nC, nA)
+        - time_action_freqs: frequency of action pulls per timestep across replicates
+        - all_compliance_records: farmer compliance info
     """
     cumRewardFiles = []
     all_action_counts = []
     all_time_action_counts = []
+    all_compliance_records = []
+
     t0 = time.time()
 
-    for i in range(nbReplicates):
+    for rep in range(nbReplicates):
         learner_copy = copy.deepcopy(learner)
-        filename, action_counts, time_action_counts = one_xp_run_with_actions_and_dump(
-            env, learner_copy, timeHorizon, root_folder
+
+        filename, action_counts, time_action_counts, compliance_records = (
+            one_xp_run_with_actions_and_dump(
+                env,
+                learner_copy,
+                timeHorizon,
+                root_folder,
+            )
         )
+
         cumRewardFiles.append(filename)
         all_action_counts.append(action_counts)
         all_time_action_counts.append(time_action_counts)
 
-    elapsed = time.time() - t0
-    avg_action_counts = np.mean(all_action_counts, axis=0)
-    time_action_counts_sum = np.sum(all_time_action_counts, axis=0)
-    time_action_freqs = time_action_counts_sum / np.maximum(
-        time_action_counts_sum.sum(axis=1, keepdims=True),
-        1,
-    )
+        for row in compliance_records:
+            row["replicate"] = rep
+            row["agent"] = learner.name()
+            all_compliance_records.append(row)
 
-    return cumRewardFiles, elapsed / nbReplicates, avg_action_counts, time_action_freqs
+    elapsed = time.time() - t0
+
+    avg_action_counts = np.mean(all_action_counts, axis=0)
+
+    time_action_counts_sum = np.sum(all_time_action_counts, axis=0)
+    time_totals = time_action_counts_sum.sum(axis=1, keepdims=True)
+    time_action_freqs = time_action_counts_sum / np.maximum(time_totals, 1)
+
+    return (
+        cumRewardFiles,
+        elapsed / nbReplicates,
+        avg_action_counts,
+        time_action_freqs,
+        all_compliance_records,
+    )
 
 
 # ==========================================
@@ -324,8 +379,11 @@ def runSequentialGamaExperiment(
     # Create output directories
     regret_folder = os.path.join(root_folder, "regret") + os.sep
     actions_folder = os.path.join(root_folder, "actions") + os.sep
+    compliance_folder = os.path.join(root_folder, "compliance") + os.sep
+
     os.makedirs(regret_folder, exist_ok=True)
     os.makedirs(actions_folder, exist_ok=True)
+    os.makedirs(compliance_folder, exist_ok=True)
 
     envFullName = env.name
     action_names = getattr(env, 'nameActions', [f"a{i}" for i in range(env.nA)])
@@ -339,12 +397,19 @@ def runSequentialGamaExperiment(
     meanelapsedtimes = []
     all_action_counts = []
     all_time_action_freqs = []
+    all_compliance_records = []
 
     for learner in learners:
         names.append(learner.name())
         print(f"[SEQ] Running {learner.name()} ({nbReplicates} replicates, horizon={timeHorizon})...")
 
-        dump_cumRewards, meanelapsedtime, avg_action_counts, time_action_freqs = sequentialRuns(
+        (
+            dump_cumRewards,
+            meanelapsedtime,
+            avg_action_counts,
+            time_action_freqs,
+            learner_compliance_records,
+        ) = sequentialRuns(
             env,
             learner,
             nbReplicates,
@@ -356,6 +421,7 @@ def runSequentialGamaExperiment(
         meanelapsedtimes.append(meanelapsedtime)
         all_action_counts.append(avg_action_counts)
         all_time_action_freqs.append(time_action_freqs)
+        all_compliance_records.extend(learner_compliance_records)
 
         print(f"[SEQ] {learner.name()} done. Avg time per replicate: {meanelapsedtime:.2f}s")
 
@@ -456,7 +522,16 @@ def runSequentialGamaExperiment(
         cmap="PuBu",
     )
 
+    # --- Compliance Analysis csv ---
+    compliance_csv_path = os.path.join(
+        compliance_folder,
+        f"compliance_{env.name}_{timestamp}.csv",
+    )
+
+    write_compliance_csv(all_compliance_records, compliance_csv_path)
+
     oR.clear_auxiliaryfiles(env, regret_folder)
     print(f"\n[INFO] Log-file: {logfilename}")
     print(f"[INFO] Regret plots: {regret_folder}")
     print(f"[INFO] Action plots: {actions_folder}")
+    print(f"[INFO] Compliance CSV: {compliance_csv_path}")
