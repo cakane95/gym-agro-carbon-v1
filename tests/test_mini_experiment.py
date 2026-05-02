@@ -22,6 +22,7 @@ from src.contextual_stat_rl.experiments.sequential_experiment import (
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ETC import GlobalETC
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualIMED_RL import GlobalIMEDRL, SemiLocalIMEDRL
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualUCRL3 import GlobalUCRL3
+from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualQLearning import GlobalQLearning
 from src.contextual_stat_rl.learners.ContextualMDPs_discrete.Optimal import ContextualOptimalControl as opt
 from src.contextual_stat_rl.environments.gama_register import make_gama
 
@@ -101,6 +102,21 @@ async def main():
                 "K": -1,
                 "max_reward": 2.5,
                 "name": "GlobalUCRL3",
+            },
+        ),
+        (
+            GlobalQLearning,
+            {
+                "nS": nS,
+                "nA": nA,
+                "nC": nC,
+                "gamma": 0.99,
+                "epsilon": 0.3,
+                "epsilon_min": 0.02,
+                "epsilon_decay": 0.98,
+                "alpha": 0.1,
+                "optimistic_init": 0.0,
+                "name": "GlobalQLearning",
             },
         ),
     ]

@@ -40,6 +40,7 @@ AGENT_ORDER = [
     "GlobalETC5",
     "GlobalETC10",
     "GlobalUCRL3",
+    "GlobalQLearning",
     "GlobalIMED-RL",
     "SemiLocalIMED-RL",
 ]

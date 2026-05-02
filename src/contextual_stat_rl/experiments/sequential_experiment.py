@@ -355,6 +355,35 @@ def plot_action_heatmaps_over_time(
     print(f"[PLOT] Action heatmaps over time saved to {output_path}")
 
 
+AGENT_ORDER = [
+    "GlobalETC3",
+    "GlobalETC5",
+    "GlobalETC10",
+    "GlobalUCRL3",
+    "GlobalQLearning",
+    "GlobalIMED-RL",
+    "SemiLocalIMED-RL",
+]
+
+
+def reorder_by_agent_order(names, *aligned_lists):
+    """
+    Reorder names and aligned lists according to AGENT_ORDER.
+    """
+    order = {name: i for i, name in enumerate(AGENT_ORDER)}
+    idx = sorted(
+        range(len(names)),
+        key=lambda i: order.get(names[i], len(order) + i),
+    )
+
+    names_sorted = [names[i] for i in idx]
+    aligned_sorted = [
+        [values[i] for i in idx]
+        for values in aligned_lists
+    ]
+
+    return names_sorted, *aligned_sorted
+
 # ==========================================
 # Main Experiment Runners
 # ==========================================
@@ -497,22 +526,36 @@ def runSequentialGamaExperiment(
         )
 
     # --- Action distribution plots ---
+    (
+        plot_names,
+        plot_action_counts,
+        plot_time_action_freqs,
+    ) = reorder_by_agent_order(
+        names,
+        all_action_counts,
+        all_time_action_freqs,
+    )
+
     plot_action_distribution(
-        names, all_action_counts, action_names,
+        plot_names,
+        plot_action_counts,
+        action_names,
         title=f"Action Distribution — {env.name}",
         output_path=os.path.join(actions_folder, f"action_distribution_{env.name}_{timestamp}.png"),
     )
 
     plot_action_distribution_by_context(
-        names, all_action_counts, action_names,
+        plot_names,
+        plot_action_counts,
+        action_names,
         nC=env.nC,
         title=f"Action Distribution by Context — {env.name}",
         output_path=os.path.join(actions_folder, f"action_distribution_by_context_{env.name}_{timestamp}.png"),
     )
 
     plot_action_heatmaps_over_time(
-        names,
-        all_time_action_freqs,
+        plot_names,
+        plot_time_action_freqs,
         action_names,
         title=f"Action Frequencies Over Time — {env.name}",
         output_path=os.path.join(
@@ -684,9 +727,19 @@ def runSequentialPythonExperiment(
             root_folder=regret_folder,
         )
 
-    plot_action_distribution(
+    (
+        plot_names,
+        plot_action_counts,
+        plot_time_action_freqs,
+    ) = reorder_by_agent_order(
         names,
         all_action_counts,
+        all_time_action_freqs,
+    )
+    
+    plot_action_distribution(
+        plot_names,
+        plot_action_counts,
         action_names,
         title=f"Action Distribution — {env.name} — Python backend",
         output_path=os.path.join(
@@ -696,8 +749,8 @@ def runSequentialPythonExperiment(
     )
 
     plot_action_distribution_by_context(
-        names,
-        all_action_counts,
+        plot_names,
+        plot_action_counts,
         action_names,
         nC=env.nC,
         title=f"Action Distribution by Context — {env.name} — Python backend",
@@ -708,8 +761,8 @@ def runSequentialPythonExperiment(
     )
 
     plot_action_heatmaps_over_time(
-        names,
-        all_time_action_freqs,
+        plot_names,
+        plot_time_action_freqs,
         action_names,
         title=f"Action Frequencies Over Time — {env.name} — Python backend",
         output_path=os.path.join(

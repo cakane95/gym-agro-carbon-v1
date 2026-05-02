@@ -60,6 +60,9 @@ async def main():
     from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualUCRL3 import (
         GlobalUCRL3,
     )
+    from src.contextual_stat_rl.learners.ContextualMDPs_discrete.ContextualQLearning import (
+        GlobalQLearning,
+    )
 
     # -------------------------------------------------------
     # Create environment
@@ -201,7 +204,7 @@ async def main():
         env.close()
         sys.exit(1)
 
-        # -------------------------------------------------------
+    # -------------------------------------------------------
     # Test 5: GlobalUCRL3
     # -------------------------------------------------------
     try:
@@ -234,7 +237,42 @@ async def main():
         sys.exit(1)
 
     # -------------------------------------------------------
-    # Test 6: All agents produce valid actions from same obs
+    # Test 6: GlobalQLearning
+    # -------------------------------------------------------
+    try:
+        q_agent = GlobalQLearning(
+            nS=nS,
+            nA=nA,
+            nC=nC,
+            gamma=0.99,
+            epsilon=0.2,
+            epsilon_min=0.01,
+            epsilon_decay=0.99,
+            alpha=0.1,
+            optimistic_init=0.0,
+            name="GlobalQLearning",
+        )
+
+        obs, info = env.reset(seed=360)
+        q_agent.reset(obs)
+
+        rewards = []
+        for t in range(n_steps):
+            action = q_agent.play(obs)
+            next_obs, reward, done, truncated, info = env.step(action)
+            q_agent.update(obs, action, reward, next_obs)
+            rewards.append(round(float(reward), 3))
+            obs = next_obs
+
+        log_test("6. GlobalQLearning", "OK",
+                 f"rewards={rewards[:5]}...")
+    except Exception as e:
+        log_test("6. GlobalQLearning", "FAILED", str(e))
+        env.close()
+        sys.exit(1)
+
+    # -------------------------------------------------------
+    # Test 7: All agents produce valid actions from same obs
     # -------------------------------------------------------
     try:
         obs, info = env.reset(seed=400)
@@ -245,6 +283,7 @@ async def main():
             "GlobalIMED-RL": imed_global,
             "SemiLocalIMED-RL": imed_semilocal,
             "GlobalUCRL3": ucrl3_agent,
+            "GlobalQLearning": q_agent,
         }
 
         for name, agent in agents.items():
@@ -257,10 +296,10 @@ async def main():
                 f"{name}.play() returned action {action} out of range [0, {nA})"
             )
 
-        log_test("6. All agents produce valid actions", "OK",
+        log_test("7. All agents produce valid actions", "OK",
                  f"obs={obs}, all actions in [0, {nA})")
     except Exception as e:
-        log_test("6. All agents produce valid actions", "FAILED", str(e))
+        log_test("7. All agents produce valid actions", "FAILED", str(e))
         env.close()
         sys.exit(1)
 

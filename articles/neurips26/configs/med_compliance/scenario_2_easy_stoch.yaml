@@ -1,7 +1,7 @@
 # Medium Compliance
 
 # Scenario 2: Easy / Stochastic
-# Large reward gaps, low noise, but 20% tree destruction risk.
+# Large reward gaps, low noise, but 15% tree destruction risk.
 # Tests robustness: investment in RNA can be lost at any step.
 
 experiment:
@@ -49,6 +49,21 @@ agents:
       epsilon: 1.0e-6
       max_iter: 3000
 
+  - class: "GlobalUCRL3"
+    params:
+      delta: 0.05
+      K: -1
+      max_reward: 2.5
+      
+  - class: "GlobalQLearning"
+    params:
+      gamma: 0.99
+      epsilon: 0.3
+      epsilon_min: 0.02
+      epsilon_decay: 0.98
+      alpha: 0.1
+      optimistic_init: 0.0
+
   - class: "GlobalIMEDRL"
     params:
       max_iter: 3000
@@ -59,10 +74,4 @@ agents:
     params:
       max_iter: 3000
       epsilon: 1.0e-3
-      max_reward: 2.5
-
-  - class: "GlobalUCRL3"
-    params:
-      delta: 0.05
-      K: -1
       max_reward: 2.5

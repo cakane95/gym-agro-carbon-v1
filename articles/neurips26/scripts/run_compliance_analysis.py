@@ -41,6 +41,26 @@ ACTION_NAMES = {
     3: "baseline",
 }
 
+AGENT_ORDER = [
+    "GlobalETC3",
+    "GlobalETC5",
+    "GlobalETC10",
+    "GlobalUCRL3",
+    "GlobalQLearning",
+    "GlobalIMED-RL",
+    "SemiLocalIMED-RL",
+]
+
+
+def ordered_agents(df):
+    """
+    Return agents in a stable, paper-friendly order.
+    """
+    present = list(df["agent"].unique())
+    ordered = [a for a in AGENT_ORDER if a in present]
+    remaining = sorted([a for a in present if a not in ordered])
+    return ordered + remaining
+
 
 # ============================================================
 # Loading utilities
@@ -154,7 +174,7 @@ def plot_recommended_vs_executed_heatmaps(
     if action_names is None:
         action_names = [ACTION_NAMES[i] for i in range(4)]
 
-    agents = sorted(df["agent"].unique())
+    agents = ordered_agents(df)
 
     for agent in agents:
         df_agent = df[df["agent"] == agent]
@@ -244,6 +264,10 @@ def plot_global_compliance_heatmap(
         .unstack(fill_value=np.nan)
     )
 
+    agents_ordered = [a for a in AGENT_ORDER if a in pivot.index]
+    agents_ordered += sorted([a for a in pivot.index if a not in agents_ordered])
+    pivot = pivot.loc[agents_ordered]
+
     agents = list(pivot.index)
     timesteps = list(pivot.columns)
 
@@ -293,7 +317,7 @@ def plot_compliance_by_action(df, output_dir):
         .reset_index()
     )
 
-    agents = sorted(df["agent"].unique())
+    agents = ordered_agents(df)
     actions = sorted(df["action_recommended"].unique())
 
     x = np.arange(len(agents))
@@ -363,7 +387,9 @@ def plot_profile_comparison(summary_df, output_dir):
     Compare average compliance rate by agent across profiles.
     """
     profiles = list(summary_df["profile"].unique())
-    agents = list(summary_df["agent"].unique())
+    present_agents = list(summary_df["agent"].unique())
+    agents = [a for a in AGENT_ORDER if a in present_agents]
+    agents += sorted([a for a in present_agents if a not in agents])
 
     x = np.arange(len(agents))
     width = 0.8 / len(profiles)
