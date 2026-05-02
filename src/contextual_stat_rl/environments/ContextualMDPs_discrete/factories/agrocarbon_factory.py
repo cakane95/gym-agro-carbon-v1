@@ -55,53 +55,102 @@ def build_tree_skeleton(nS, nA, trigger_action, trigger_state=0):
             skeleton[s] = actions_without_trigger.copy()
     return skeleton
 
-def _age_bonus(s, nS, age_bonus_max, growth_rate=3.0):
+def _age_bonus(s, nS, age_bonus_max=0.40, growth_rate=3.0):
     """
-    Convex exponential age bonus.
-    
-    - At s=0: bonus = 0 exactly
-    - Grows slowly at first, then accelerates
+    Convex exponential tree-age bonus.
+
+    The bonus is a normalized proxy for the delayed production-carbon benefit
+    of tree growth. It is not difficulty-dependent: easy and hard scenarios
+    differ through base reward gaps, context gaps, observation noise, and
+    transition stochasticity, not through the assumed mature-tree benefit.
+
+    - At s=0: bonus = 0.0 exactly
+    - Grows slowly for young trees, then accelerates toward maturity
     - At s=nS-1: bonus = age_bonus_max exactly
-    - growth_rate controls curvature (higher = more convex)
+    - growth_rate controls the convexity of the curve
     """
     if nS <= 1:
         return 0.0
+
     t = s / (nS - 1)
-    return age_bonus_max * (math.exp(growth_rate * t) - 1) / (math.exp(growth_rate) - 1)
+
+    return (
+        age_bonus_max
+        * (math.exp(growth_rate * t) - 1)
+        / (math.exp(growth_rate) - 1)
+    )
 
 def _build_base_means(nA, difficulty):
     """
-    Generate base reward means for each action.
-    The highest index (baseline) gets the highest immediate reward.
+    Generate normalized base reward means for each action.
+
+    The last action is always the baseline/conventional cropping action,
+    fixed at 1.0. Other actions receive non-zero values because the benchmark
+    approximates a mixed production-carbon objective rather than crop yield alone.
+
+    For nA=4, the intended action order is:
+    0 = fallow
+    1 = fertilized fallow
+    2 = tree/RNA
+    3 = baseline/conventional cropping
     """
     if difficulty == "easy":
-        low, high = 0.2, 1.2
+        gap = 0.20
     else:
-        low, high = 0.4, 0.7
-    
-    return [low + (high - low) * i / max(nA - 1, 1) for i in range(nA)]
+        gap = 0.10
+
+    baseline = 1.0
+
+    if nA <= 1:
+        return [baseline]
+
+    # For nA actions, keep baseline as the last action and assign
+    # evenly spaced lower means to the previous nA-1 actions.
+    return [
+        baseline - gap * (nA - 1 - i)
+        for i in range(nA - 1)
+    ] + [baseline]
 
 def _build_context_scales(nC, difficulty):
     """
-    Generate per-context multipliers.
-    Easy: larger variation across contexts (0.7 to 1.3)
-    Hard: tighter variation (0.9 to 1.1)
+    Generate per-context productivity multipliers.
+
+    Contexts represent stylized soil or parcel conditions. The best context
+    is normalized to 1.0, while less favorable contexts slightly reduce the
+    immediate reward potential. For instance, this can be interpreted as a
+    coarse abstraction of differences between poorer sandy soils and more
+    fertile soils.
+
+    The easy setting uses larger context gaps; the hard setting uses tighter
+    context gaps.
     """
     if difficulty == "easy":
-        low, high = 0.7, 1.3
+        gap = 0.10
     else:
-        low, high = 0.9, 1.1
-    
-    return [low + (high - low) * c / max(nC - 1, 1) for c in range(nC)]
+        gap = 0.05
+
+    best = 1.0
+
+    if nC <= 1:
+        return [best]
+
+    return [
+        best - gap * (nC - 1 - c)
+        for c in range(nC)
+    ]
 
 def build_agnostic_reward_matrix(nS, nA, nC, difficulty="easy"):
     """R[s][a] — same reward regardless of context."""
     base_means = _build_base_means(nA, difficulty)
-    action_bonus_scales = _build_action_bonus_scales(nA, difficulty)
+    action_bonus_scales = _build_action_bonus_scales(nA)
 
-    age_bonus_max = 0.5 if difficulty == "easy" else 0.2
-    growth_rate = 3.0 if difficulty == "easy" else 2.0
-    noise = 0.05 if difficulty == "easy" else 0.2
+    # Fixed agronomic delayed-tree effect.
+    # Difficulty should affect statistical separability, not the assumed mature-tree benefit.
+    age_bonus_max = 0.36
+    growth_rate = 3.0
+
+    # Difficulty controls observation noise.
+    noise = 0.05 if difficulty == "easy" else 0.15
 
     R = {}
     for s in range(nS):
@@ -114,33 +163,44 @@ def build_agnostic_reward_matrix(nS, nA, nC, difficulty="easy"):
 
     return R
 
-def _build_action_bonus_scales(nA, difficulty):
+def _build_action_bonus_scales(nA):
     """
     Generate per-action multipliers for the tree-age bonus.
 
-    The goal is to make the tree state valuable mainly because it improves
-    some downstream practices, especially the baseline/cropping action.
+    The tree-age bonus represents the delayed benefit of a mature tree.
+    This benefit is action-dependent: it is strongest for cropping under
+    tree influence and weaker for restorative or tree-protection actions.
+
+    Action order:
+    0 = fallow
+    1 = fertilized fallow
+    2 = tree/RNA
+    3 = baseline/conventional cropping
+
+    The scale is kept fixed across difficulty settings because it represents
+    an agronomic mechanism rather than statistical difficulty.
     """
-    if difficulty == "easy":
-        default_scales = [0.2, 0.4, 0.3, 1.0]
-    else:
-        default_scales = [0.1, 0.25, 0.2, 0.6]
+    default_scales = [0.10, 0.40, 0.20, 1.00]
 
     if nA <= len(default_scales):
-        return default_scales[:nA]
+        # Always keep the last action as the baseline if nA < 4
+        return default_scales[-nA:]
 
-    # If more actions are added later, extend with neutral moderate values.
-    return default_scales + [0.5] * (nA - len(default_scales))
+    return default_scales + [0.50] * (nA - len(default_scales))
 
 def build_contextual_reward_matrix(nS, nA, nC, difficulty="easy"):
     """R[c][s][a] — rewards vary by context."""
     base_means = _build_base_means(nA, difficulty)
     context_scales = _build_context_scales(nC, difficulty)
-    action_bonus_scales = _build_action_bonus_scales(nA, difficulty)
+    action_bonus_scales = _build_action_bonus_scales(nA)
 
-    age_bonus_max = 0.5 if difficulty == "easy" else 0.2
-    growth_rate = 3.0 if difficulty == "easy" else 2.0
-    noise = 0.05 if difficulty == "easy" else 0.2
+    # Fixed agronomic delayed-tree effect.
+    # Difficulty should affect statistical separability, not the assumed mature-tree benefit.
+    age_bonus_max = 0.36
+    growth_rate = 3.0
+
+    # Difficulty controls observation noise.
+    noise = 0.05 if difficulty == "easy" else 0.15
 
     R = {}
     for c in range(nC):

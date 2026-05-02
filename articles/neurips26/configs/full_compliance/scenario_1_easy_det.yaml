@@ -51,7 +51,7 @@ agents:
     params:
       delta: 0.05
       K: -1
-      max_reward: 2.5
+      max_reward: 2.0
       
   - class: "GlobalQLearning"
     params:
@@ -66,10 +66,10 @@ agents:
     params:
       max_iter: 3000
       epsilon: 1.0e-3
-      max_reward: 2.5
+      max_reward: 2.0
 
   - class: "SemiLocalIMEDRL"
     params:
       max_iter: 3000
       epsilon: 1.0e-3
-      max_reward: 2.5
+      max_reward: 2.0

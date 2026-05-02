@@ -35,8 +35,19 @@ species Task {
  * 2. Compute the state transition (aging logic)
  *
  * Reward:
- *   - agnostic:   R(s,a)   ~ N(base_means[a] + age_bonus(s), noise)
- *   - contextual: R(c,s,a) ~ N(base_means[a] * context_scales[c] + age_bonus(s), noise)
+ *   - agnostic:
+ *       R(s,a) ~ N(
+ *           base_means[a]
+ *           + age_bonus(s) * action_bonus_scales[a],
+ *           noise
+ *       )
+ *
+ *   - contextual:
+ *       R(c,s,a) ~ N(
+ *           base_means[a] * context_scales[c]
+ *           + age_bonus(s) * action_bonus_scales[a],
+ *           noise
+ *       )
  *
  * Transition:
  *   - s=0 and a=trigger_action -> s=1 (RNA initiated)
@@ -52,6 +63,7 @@ species StepTask parent: Task {
      * @param action_id: the action actually executed (a_real, not a_recommended)
      * @param base_means: list of base reward means per action
      * @param context_scales: list of reward multipliers per context
+     * @param action_bonus_scales: list of multipliers for the age bonus per action
      * @param r_is_contextual: if true, reward depends on cell.soil_type_id
      * @param noise: standard deviation of reward gaussian
      * @param age_bonus_max: maximum age bonus at maturity

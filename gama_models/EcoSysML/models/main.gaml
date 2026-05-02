@@ -39,10 +39,10 @@ global {
     // --- Reward Parameters ---
     // =============================================
 
-    list<float> base_means <- [0.2, 0.533, 0.867, 1.2];
-    list<float> action_bonus_scales <- [0.2, 0.4, 0.3, 1.0];
+    list<float> base_means <- [0.4, 0.6, 0.8, 1.0];
+    list<float> action_bonus_scales <- [0.10, 0.40, 0.20, 1.00];
     float reward_noise <- 0.05;
-    float age_bonus_max <- 0.5;
+    float age_bonus_max <- 0.36;
     float growth_rate <- 3.0;
 	bool r_is_contextual <- false;
 
@@ -520,8 +520,8 @@ experiment test_env type: gui {
     parameter "Trigger Action" var: trigger_action <- 2;
     parameter "Cut Probability" var: p_cut <- 0.0;
 
-    parameter "Base Means" var: base_means <- [0.2, 0.533, 0.867, 1.2];
-    parameter "Age Bonus Max" var: age_bonus_max <- 0.5;
+    parameter "Base Means" var: base_means <- [0.4, 0.6, 0.8, 1.0];
+    parameter "Age Bonus Max" var: age_bonus_max <- 0.36;
     parameter "Growth Rate" var: growth_rate <- 3.0;
     parameter "Reward Noise" var: reward_noise <- 0.05;
 
@@ -544,7 +544,7 @@ experiment gym_env type: gui {
 	parameter "Forced Seed" var: forced_seed <- -1.0;
 
     parameter "Server Port" var: gama_server_port;
-    parameter "Action Bonus Scales" var: action_bonus_scales <- [0.2, 0.4, 0.3, 1.0];
+    parameter "Action Bonus Scales" var: action_bonus_scales <- [0.10, 0.40, 0.20, 1.00];
 
     parameter "Number of States" var: nS;
     parameter "Number of Actions" var: nA;

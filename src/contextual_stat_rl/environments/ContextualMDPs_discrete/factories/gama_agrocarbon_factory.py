@@ -56,11 +56,11 @@ def _build_gaml_parameters(
     """
     base_means = _build_base_means(nA, difficulty)
     context_scales = _build_context_scales(nC, difficulty)
-    action_bonus_scales = _build_action_bonus_scales(nA, difficulty)
+    action_bonus_scales = _build_action_bonus_scales(nA)
 
-    age_bonus_max = 0.5 if difficulty == "easy" else 0.2
-    growth_rate = 3.0 if difficulty == "easy" else 2.0
-    noise = 0.05 if difficulty == "easy" else 0.2
+    age_bonus_max = 0.36
+    growth_rate = 3.0
+    noise = 0.05 if difficulty == "easy" else 0.15
 
     params = [
         {"name": "Number of States", "type": "int", "value": nS},
