@@ -17,7 +17,9 @@ from src.contextual_stat_rl.environments.ContextualMDPs_discrete.factories.agroc
     build_tree_skeleton,
     build_action_names,
     _build_action_bonus_scales,
-    _build_base_means
+    _build_base_means,
+    build_contextual_tree_transitions,
+    build_context_p_cut_scales,
 )
 
 def _build_compliance_params(
@@ -47,7 +49,11 @@ def _build_gaml_parameters(
     trigger_action,
     p_cut,
     difficulty,
+    c_is_static=True,
     r_is_contextual=False,
+    p_is_contextual=False,
+    context_p_cut_scale_gap=0.05,
+    reference_context=0,
     compliance_params=None,
 ):
     """
@@ -62,6 +68,12 @@ def _build_gaml_parameters(
     growth_rate = 3.0
     noise = 0.05 if difficulty == "easy" else 0.15
 
+    context_p_cut_scales = build_context_p_cut_scales(
+        nC=nC,
+        gap=context_p_cut_scale_gap,
+        reference_context=reference_context,
+    )
+
     params = [
         {"name": "Number of States", "type": "int", "value": nS},
         {"name": "Number of Actions", "type": "int", "value": nA},
@@ -74,9 +86,14 @@ def _build_gaml_parameters(
         {"name": "Reward Noise", "type": "float", "value": noise},
         {"name": "Base Means", "type": "list", "value": base_means},
 
+        {"name": "Context Is Static", "type": "bool", "value": c_is_static},
+
         {"name": "Reward Is Contextual", "type": "bool", "value": r_is_contextual},
         {"name": "Context Scales", "type": "list", "value": context_scales},
         {"name": "Action Bonus Scales", "type": "list", "value": action_bonus_scales},
+
+        {"name": "Transition Is Contextual", "type": "bool", "value": p_is_contextual},
+        {"name": "Context Cut Scales", "type": "list", "value": context_p_cut_scales},
     ]
 
     if compliance_params is None:
@@ -89,6 +106,7 @@ def _build_gaml_parameters(
 def build_gama_agnostic_agrocarbon_config(
     nS=4, nA=4, nC=3, trigger_action=2,
     p_cut=0.0, difficulty="easy",
+    c_is_static=True,
     compliance_params=None,
     gaml_experiment_path=None,
     gaml_experiment_name="gym_env",
@@ -104,7 +122,7 @@ def build_gama_agnostic_agrocarbon_config(
     if gama_port is None:
         gama_port = int(os.environ.get("GAMA_PORT", 6868))
 
-    gaml_params = _build_gaml_parameters(nS, nA, nC, trigger_action, p_cut, difficulty, r_is_contextual=False, compliance_params=compliance_params)
+    gaml_params = _build_gaml_parameters(nS, nA, nC, trigger_action, p_cut, difficulty,c_is_static=c_is_static, r_is_contextual=False, compliance_params=compliance_params)
 
     return {
         # --- MDP kwargs ---
@@ -116,7 +134,7 @@ def build_gama_agnostic_agrocarbon_config(
         "mu0": build_initial_state_dist(nS, nC, start_state=0),
         "nu": build_context_dist(nC),
         "skeleton": build_tree_skeleton(nS, nA, trigger_action),
-        "c_is_static": True,
+        "c_is_static": c_is_static,
         "p_is_contextual": False,
         "r_is_contextual": False,
         "nameActions": build_action_names(nA),
@@ -134,6 +152,7 @@ def build_gama_agnostic_agrocarbon_config(
 def build_gama_reward_contextual_agrocarbon_config(
     nS=4, nA=4, nC=3, trigger_action=2,
     p_cut=0.0, difficulty="easy",
+    c_is_static=True,
     compliance_params=None,
     gaml_experiment_path=None,
     gaml_experiment_name="gym_env",
@@ -148,7 +167,7 @@ def build_gama_reward_contextual_agrocarbon_config(
     if gama_port is None:
         gama_port = int(os.environ.get("GAMA_PORT", 6868))
 
-    gaml_params = _build_gaml_parameters(nS, nA, nC, trigger_action, p_cut, difficulty, r_is_contextual=True, compliance_params=compliance_params)
+    gaml_params = _build_gaml_parameters(nS, nA, nC, trigger_action, p_cut, difficulty, c_is_static=c_is_static, r_is_contextual=True, compliance_params=compliance_params)
 
     return {
         # --- MDP kwargs ---
@@ -160,7 +179,7 @@ def build_gama_reward_contextual_agrocarbon_config(
         "mu0": build_initial_state_dist(nS, nC, start_state=0),
         "nu": build_context_dist(nC),
         "skeleton": build_tree_skeleton(nS, nA, trigger_action),
-        "c_is_static": True,
+        "c_is_static": c_is_static,
         "p_is_contextual": False,
         "r_is_contextual": True, # Contextual Flag!
         "nameActions": build_action_names(nA),
@@ -172,4 +191,79 @@ def build_gama_reward_contextual_agrocarbon_config(
         "gama_ip_address": gama_ip_address,
         "gama_port": gama_port,
         "gaml_experiment_parameters": gaml_params, 
+    }
+
+def build_gama_fully_contextual_agrocarbon_config(
+    nS=4,
+    nA=4,
+    nC=3,
+    trigger_action=2,
+    p_cut=0.0,
+    difficulty="easy",
+    c_is_static=True,
+    context_p_cut_scale_gap=0.05,
+    reference_context=0,
+    compliance_params=None,
+    gaml_experiment_path=None,
+    gaml_experiment_name="gym_env",
+    gama_ip_address=None,
+    gama_port=None,
+):
+    """
+    Build config for a GAMA-backed fully-contextual agrocarbon environment.
+
+    In the fully-contextual setting:
+    - rewards depend on context: R[c][s][a]
+    - transitions depend on context: P[c][s][a]
+    """
+    if gama_ip_address is None:
+        gama_ip_address = os.environ.get("GAMA_HOST", "localhost")
+    if gama_port is None:
+        gama_port = int(os.environ.get("GAMA_PORT", 6868))
+
+    gaml_params = _build_gaml_parameters(
+        nS=nS,
+        nA=nA,
+        nC=nC,
+        trigger_action=trigger_action,
+        p_cut=p_cut,
+        difficulty=difficulty,
+        c_is_static=c_is_static,
+        r_is_contextual=True,
+        p_is_contextual=True,
+        context_p_cut_scale_gap=context_p_cut_scale_gap,
+        reference_context=reference_context,
+        compliance_params=compliance_params,
+    )
+
+    return {
+        # --- MDP kwargs ---
+        "nS": nS,
+        "nA": nA,
+        "nC": nC,
+        "P": build_contextual_tree_transitions(
+            nS=nS,
+            nA=nA,
+            nC=nC,
+            trigger_action=trigger_action,
+            p_cut=p_cut,
+            context_p_cut_scale_gap=context_p_cut_scale_gap,
+            reference_context=reference_context,
+        ),
+        "R": build_contextual_reward_matrix(nS, nA, nC, difficulty),
+        "mu0": build_initial_state_dist(nS, nC, start_state=0),
+        "nu": build_context_dist(nC),
+        "skeleton": build_tree_skeleton(nS, nA, trigger_action),
+        "c_is_static": c_is_static,
+        "p_is_contextual": True,
+        "r_is_contextual": True,
+        "nameActions": build_action_names(nA),
+        "seed": 123,
+
+        # --- GAMA kwargs ---
+        "gaml_experiment_path": gaml_experiment_path,
+        "gaml_experiment_name": gaml_experiment_name,
+        "gama_ip_address": gama_ip_address,
+        "gama_port": gama_port,
+        "gaml_experiment_parameters": gaml_params,
     }

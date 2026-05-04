@@ -7,6 +7,7 @@ import sys
 from src.contextual_stat_rl.environments.ContextualMDPs_discrete.factories.agrocarbon_factory import (
     build_agnostic_agrocarbon_config,
     build_reward_contextual_agrocarbon_config,
+    build_fully_contextual_agrocarbon_config
 )
 
 INFINITY = sys.maxsize
@@ -62,6 +63,7 @@ registerContextualStatisticalRLenvironments = {
     "basic-agrocarbon-context": build_agnostic_agrocarbon_config,
     "agrocarbon-agnostic": build_agnostic_agrocarbon_config,
     "agrocarbon-reward-contextual": build_reward_contextual_agrocarbon_config,
+    "agrocarbon-fully-contextual": build_fully_contextual_agrocarbon_config,
 }
 
 

@@ -1,8 +1,8 @@
 """
-Minimal experiment test in contextual_reward env.
+Minimal experiment test in fully_contextual env.
 
 Usage:
-    docker-compose exec gym-agent python tests/test_mini_contextual_reward_experiment.py
+    docker-compose exec gym-agent python tests/test_mini_fully_contextual_experiment.py
 """
 
 import os
@@ -33,7 +33,7 @@ async def main():
     )
 
     print("=" * 60)
-    print("Mini Contextual Reward Experiment: GAMA + RL Agents")
+    print("Mini Fully Contextual Experiment: GAMA + RL Agents")
     print(f"  GAML:         {gaml_path}")
     print(f"  Horizon:      20")
     print(f"  Replicates:   10")
@@ -43,7 +43,7 @@ async def main():
     #    register_gama_env returns the registered gym name
     #    make_gama creates the first instance (for oracle + setup)
     env = make_gama(
-        "gama-agrocarbon-reward-contextual",
+        "gama-agrocarbon-fully-contextual",
         gaml_experiment_path=gaml_path,
     )
 

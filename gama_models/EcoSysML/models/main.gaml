@@ -46,10 +46,18 @@ global {
     float growth_rate <- 3.0;
 	bool r_is_contextual <- false;
 
+	// =============================================
+	// --- Dynamic Parameters ---
+	// =============================================
+	
+	bool p_is_contextual <- false;
+	list<float> context_cut_scales <- [];
+	
     // =============================================
     // --- Context Distribution ---
     // =============================================
 
+    bool c_is_static <- true;
     list<float> context_dist <- [0.4, 0.4, 0.2];
     list<float> context_scales <- [1.0, 1.0, 1.0];
     
@@ -412,14 +420,24 @@ global {
             bool was_cut <- false;
 
             ask cut_engine {
-                was_cut <- execute_on(cell, world.p_cut);
+                was_cut <- execute_on(
+				    cell,
+				    world.p_cut,
+				    world.p_is_contextual,
+				    world.context_cut_scales
+				);
             }
+            
 
             actions_executed <- actions_executed + [a_real];
             parcel_rewards <- parcel_rewards + [r];
             cut_flags <- cut_flags + [was_cut];
 
             total_reward <- total_reward + r;
+            
+            if (!world.c_is_static) {
+			    cell.soil_type_id <- sample_context();
+			}
 
             idx <- idx + 1;
         }
@@ -551,6 +569,8 @@ experiment gym_env type: gui {
     parameter "Number of Contexts" var: nC;
     parameter "Trigger Action" var: trigger_action;
     parameter "Cut Probability" var: p_cut;
+    
+    parameter "Context Is Static" var: c_is_static <- true;
 
     parameter "Reward Is Contextual" var: r_is_contextual <- false;
 	parameter "Context Scales" var: context_scales <- [1.0, 1.0, 1.0];

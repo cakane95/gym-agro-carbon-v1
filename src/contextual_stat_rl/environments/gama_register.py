@@ -23,6 +23,7 @@ import numpy as np
 from src.contextual_stat_rl.environments.ContextualMDPs_discrete.factories.gama_agrocarbon_factory import (
     build_gama_agnostic_agrocarbon_config,
     build_gama_reward_contextual_agrocarbon_config,
+    build_gama_fully_contextual_agrocarbon_config,
 )
 
 INFINITY = sys.maxsize
@@ -98,6 +99,7 @@ def registerContextualGamaMDP(
 registerContextualGamaRLenvironments = {
     "gama-agrocarbon-agnostic": build_gama_agnostic_agrocarbon_config,
     "gama-agrocarbon-reward-contextual": build_gama_reward_contextual_agrocarbon_config,
+    "gama-agrocarbon-fully-contextual": build_gama_fully_contextual_agrocarbon_config,
 }
 
 

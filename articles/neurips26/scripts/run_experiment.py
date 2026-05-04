@@ -135,6 +135,9 @@ async def main():
     gama_cfg = config.get("gama", {})
     farmer_cfg = gama_cfg.get("farmer", {})
     agent_cfgs = config["agents"]
+    c_is_static = env_cfg.get("c_is_static", True)
+    context_p_cut_scale_gap = env_cfg.get("context_p_cut_scale_gap", 0.05)
+    reference_context = env_cfg.get("reference_context", 0)
 
     rel_config_path = os.path.relpath(config_path, os.path.join(SCRIPT_DIR, "..", "configs"))
     scenario_name = os.path.splitext(rel_config_path)[0].replace(os.sep, "__")
@@ -144,6 +147,7 @@ async def main():
     print(f"  Environment:  {exp_cfg['name']}")
     print(f"  nS={env_cfg['nS']}  nA={env_cfg['nA']}  nC={env_cfg['nC']}")
     print(f"  Difficulty:   {env_cfg['difficulty']}")
+    print(f"  c_is_static:  {c_is_static}")
     print(f"  p_cut:        {env_cfg['p_cut']}")
     print(f"  Horizon:      {exp_cfg['timeHorizon']}")
     print(f"  Replicates:   {exp_cfg['nbReplicates']}")
@@ -179,6 +183,9 @@ async def main():
             trigger_action=env_cfg.get("trigger_action", 2),
             p_cut=env_cfg["p_cut"],
             difficulty=env_cfg["difficulty"],
+            c_is_static=c_is_static,
+            context_p_cut_scale_gap=context_p_cut_scale_gap,
+            reference_context=reference_context,
         )
     else:
         print("[MODE] GAMA backend")
@@ -191,6 +198,9 @@ async def main():
             trigger_action=env_cfg.get("trigger_action", 2),
             p_cut=env_cfg["p_cut"],
             difficulty=env_cfg["difficulty"],
+            c_is_static=c_is_static,
+            context_p_cut_scale_gap=context_p_cut_scale_gap,
+            reference_context=reference_context,
             compliance_params=farmer_cfg,
             gaml_experiment_path=gaml_path,
             gaml_experiment_name=gaml_experiment_name,

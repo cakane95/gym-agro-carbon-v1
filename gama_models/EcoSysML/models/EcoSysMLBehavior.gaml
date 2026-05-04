@@ -141,33 +141,54 @@ species StepTask parent: Task {
  * Applies after StepTask: if the tree survives, s_next stands.
  * If cut, the tree is destroyed and the parcel returns to s=0.
  *
- * Later, this logic can be driven by a Bandit agent with 
+ * In the fully-contextual setting, cutting risk can depend on the parcel context:
+ *   p_cut^c = p_cut * context_cut_scales[c]
+ *
+ * Later, this logic can be driven by a pastoralist or biomass-use agent with
  * its own decision process instead of a simple coin flip.
  */
 species CutTask parent: Task {
-	
-	/*
-	 * Evaluate and apply the risk of tree cutting.
-	 *
-	 * @param cell: the target Parcel
-	 * @param p_cut: probability of the tree being cut down
-	 *
-	 * @return true if the tree was cut, false otherwise
-	 */
-	action execute_on(Parcel cell, float p_cut) type: bool {
-		
-		// Only applies if a tree exists (s > 0)
-		if (cell.new_tree_age > 0 and p_cut > 0.0) {
-			if (flip(p_cut)) {
-				// Tree is cut down — destroy visual and reset state
-				Tree tree_on_cell <- Tree first_with (each.location = cell.location);
-				if (tree_on_cell != nil) {
-					ask tree_on_cell { do die; }
-				}
-				cell.new_tree_age <- 0;
-				return true;
-			}
-		}
-		return false;
-	}
+
+    /*
+     * Evaluate and apply the risk of tree cutting.
+     *
+     * @param cell: the target Parcel
+     * @param p_cut: baseline probability of the tree being cut down
+     * @param transition_is_contextual: if true, cutting risk depends on cell.soil_type_id
+     * @param context_cut_scales: multiplicative cutting-risk scales per context
+     *
+     * @return true if the tree was cut, false otherwise
+     */
+    action execute_on(
+        Parcel cell,
+        float p_cut,
+        bool transition_is_contextual,
+        list<float> context_cut_scales
+    ) type: bool {
+
+        float effective_p_cut <- p_cut;
+
+        if (transition_is_contextual) {
+            effective_p_cut <- p_cut * context_cut_scales[cell.soil_type_id];
+        }
+
+        // Guardrails: keep the probability valid even if parameters are misconfigured.
+        effective_p_cut <- max(0.0, min(1.0, effective_p_cut));
+
+        // Only applies if a tree exists (s > 0)
+        if (cell.new_tree_age > 0 and effective_p_cut > 0.0) {
+            if (flip(effective_p_cut)) {
+                // Tree is cut down — destroy visual and reset state
+                Tree tree_on_cell <- Tree first_with (each.location = cell.location);
+                if (tree_on_cell != nil) {
+                    ask tree_on_cell { do die; }
+                }
+
+                cell.new_tree_age <- 0;
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

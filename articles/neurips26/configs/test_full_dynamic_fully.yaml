@@ -1,0 +1,74 @@
+experiment:
+  name: "gama-agrocarbon-fully-contextual"
+  timeHorizon: 20
+  nbReplicates: 5
+
+environment:
+  nS: 8
+  nA: 4
+  nC: 3
+  trigger_action: 2
+  p_cut: 0.15
+  difficulty: "easy"
+  c_is_static: false
+  context_p_cut_scale_gap: 0.05
+  reference_context: 0
+
+gama:
+  gaml_experiment_name: "gym_env"
+  farmer:
+    household_size: 1
+    tree_knowledge: 1.0
+    base_compliance: 1.0
+    food_pressure_penalty: 0.0
+    tree_knowledge_bonus: 0.0
+    fallback_action: 3
+
+agents:
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 3
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 5
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalETC"
+    params:
+      exploration_limit: 10
+      gamma: 0.99
+      epsilon: 1.0e-6
+      max_iter: 3000
+
+  - class: "GlobalUCRL3"
+    params:
+      delta: 0.05
+      K: -1
+      max_reward: 2.0
+
+  - class: "GlobalQLearning"
+    params:
+      gamma: 0.99
+      epsilon: 0.3
+      epsilon_min: 0.02
+      epsilon_decay: 0.98
+      alpha: 0.1
+      optimistic_init: 0.0
+
+  - class: "GlobalIMEDRL"
+    params:
+      max_iter: 3000
+      epsilon: 1.0e-3
+      max_reward: 2.0
+
+  - class: "SemiLocalIMEDRL"
+    params:
+      max_iter: 3000
+      epsilon: 1.0e-3
+      max_reward: 2.0
