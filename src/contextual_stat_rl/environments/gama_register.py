@@ -56,6 +56,7 @@ def registerContextualGamaMDP(
     gama_ip_address="localhost",
     gama_port=6868,
     gaml_experiment_parameters=None,
+    step_timeout=30.0,
 ):
     if name is None:
         name = f"ContextualGamaMDP-S{nS}_A{nA}_C{nC}_s{seed}-v0"
@@ -87,6 +88,7 @@ def registerContextualGamaMDP(
             "gama_ip_address": gama_ip_address,
             "gama_port": gama_port,
             "gaml_experiment_parameters": gaml_experiment_parameters,
+            "step_timeout": step_timeout,
         },
     )
     return name

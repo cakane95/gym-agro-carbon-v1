@@ -16,6 +16,7 @@ environment:
 
 gama:
   gaml_experiment_name: "gym_env"
+  step_timeout: 5.0
   farmer:
     household_size: 1
     tree_knowledge: 1.0

@@ -112,6 +112,7 @@ def build_gama_agnostic_agrocarbon_config(
     gaml_experiment_name="gym_env",
     gama_ip_address=None,
     gama_port=None,
+    step_timeout=30.0,
 ):
     """
     Build config for a GAMA-backed agnostic agrocarbon environment.
@@ -146,6 +147,7 @@ def build_gama_agnostic_agrocarbon_config(
         "gama_ip_address": gama_ip_address,
         "gama_port": gama_port,
         "gaml_experiment_parameters": gaml_params, # Injected to sync physics!
+        "step_timeout": step_timeout,
     }
 
 
@@ -158,6 +160,7 @@ def build_gama_reward_contextual_agrocarbon_config(
     gaml_experiment_name="gym_env",
     gama_ip_address=None,
     gama_port=None,
+    step_timeout=30.0,
 ):
     """
     Build config for a GAMA-backed reward_contextual agrocarbon environment.
@@ -190,7 +193,8 @@ def build_gama_reward_contextual_agrocarbon_config(
         "gaml_experiment_name": gaml_experiment_name,
         "gama_ip_address": gama_ip_address,
         "gama_port": gama_port,
-        "gaml_experiment_parameters": gaml_params, 
+        "gaml_experiment_parameters": gaml_params,
+        "step_timeout": step_timeout,
     }
 
 def build_gama_fully_contextual_agrocarbon_config(
@@ -208,6 +212,7 @@ def build_gama_fully_contextual_agrocarbon_config(
     gaml_experiment_name="gym_env",
     gama_ip_address=None,
     gama_port=None,
+    step_timeout=30.0,
 ):
     """
     Build config for a GAMA-backed fully-contextual agrocarbon environment.
@@ -266,4 +271,5 @@ def build_gama_fully_contextual_agrocarbon_config(
         "gama_ip_address": gama_ip_address,
         "gama_port": gama_port,
         "gaml_experiment_parameters": gaml_params,
+        "step_timeout": step_timeout,
     }

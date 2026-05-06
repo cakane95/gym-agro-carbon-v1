@@ -8,12 +8,174 @@ overrides step() and reset() to use GAMA headless as the simulation engine.
 Designed for the sequential case. The observation format remains
 (c, s) as expected by all contextual agents.
 """
-
+import asyncio
 import numpy as np
 import gama_client
+from gama_client.message_types import MessageTypes
+from gama_client.command_types import CommandTypes
 from gama_gymnasium.gama_client_wrapper import GamaClientWrapper
 from src.contextual_stat_rl.environments.ContextualMDPs_discrete.contextualMDP import ContextualDiscreteMDP
 from statisticalrl_environments.MDPs_discrete.utils import categorical_sample
+
+class GamaCommandError(RuntimeError):
+    """Raised when a GAMA command fails or times out."""
+    pass
+
+class GymAgroCarbonGamaClientWrapper(GamaClientWrapper):
+    """
+    GymAgroCarbon-specific extension of GamaClientWrapper.
+
+    Adds timeout support around GAMA expression and step execution, even for
+    older versions of gama_client where synchronous methods do not expose
+    timeout arguments.
+    """
+
+    def load_experiment(
+        self,
+        file_path: str,
+        experiment_name: str,
+        parameters=None,
+        timeout=None,
+    ):
+        """
+        Load a GAMA experiment with an optional timeout.
+
+        Mirrors GamaClientWrapper.load_experiment(), but wraps the underlying
+        load_awaitable coroutine with asyncio.wait_for so that a stopped or blocked
+        GAMA server does not hang indefinitely.
+        """
+        parameters = parameters or []
+
+        try:
+            if timeout is not None and timeout > 0:
+                response = self.client.event_loop.run_until_complete(
+                    asyncio.wait_for(
+                        self.client.load_awaitable(
+                            file_path=file_path,
+                            experiment_name=experiment_name,
+                            console=False,
+                            runtime=True,
+                            parameters=parameters,
+                        ),
+                        timeout=timeout,
+                    )
+                )
+            else:
+                response = self.client.load(
+                    file_path,
+                    experiment_name,
+                    console=False,
+                    runtime=True,
+                    parameters=parameters,
+                )
+
+        except asyncio.TimeoutError as exc:
+            raise GamaCommandError(
+                f"GAMA load_experiment timed out after {timeout} seconds. "
+                f"Model: {file_path}, experiment: {experiment_name}"
+            ) from exc
+
+        if response["type"] != MessageTypes.CommandExecutedSuccessfully.value:
+            raise GamaCommandError(f"Failed to load GAMA experiment: {response}")
+
+        experiment_id = response["content"]
+
+        # Preserve parent behavior for port 1000.
+        if self.port == 1000:
+            import time
+            time.sleep(8)
+
+        return experiment_id
+    
+    def _execute_expression(self, experiment_id: str, expression: str, timeout=None):
+        """Execute a GAMA expression with an optional timeout."""
+        try:
+            if timeout is not None and timeout > 0:
+                response = self.client.event_loop.run_until_complete(
+                    asyncio.wait_for(
+                        self.client.expression_awaitable(
+                            experiment_id,
+                            expression,
+                        ),
+                        timeout=timeout,
+                    )
+                )
+            else:
+                response = self.client.expression(experiment_id, expression)
+
+        except asyncio.TimeoutError as exc:
+            raise GamaCommandError(
+                f"GAMA expression timed out after {timeout} seconds. "
+                f"Expression: {expression}"
+            ) from exc
+
+        if response["type"] != MessageTypes.CommandExecutedSuccessfully.value:
+            raise GamaCommandError(f"Failed to execute expression: {response}")
+
+        return response["content"]
+    
+    def execute_raw_step(self, experiment_id: str, timeout=None):
+        """Execute one raw GAMA step with optional timeout."""
+        try:
+            if timeout is not None and timeout > 0:
+                response = self.client.event_loop.run_until_complete(
+                    asyncio.wait_for(
+                        self.client.step_awaitable(
+                            experiment_id,
+                            sync=True,
+                        ),
+                        timeout=timeout,
+                    )
+                )
+            else:
+                response = self.client.step(experiment_id, sync=True)
+
+        except asyncio.TimeoutError as exc:
+            raise GamaCommandError(
+                f"GAMA raw step timed out after {timeout} seconds."
+            ) from exc
+
+        if response["type"] != MessageTypes.CommandExecutedSuccessfully.value:
+            raise GamaCommandError(f"Failed to execute raw step: {response}")
+
+        return response
+
+    def execute_step(self, experiment_id: str, action, timeout=None):
+        """Execute one step in GAMA with an optional timeout."""
+        self._execute_expression(
+            experiment_id,
+            f"GymAgent[0].next_action <- {action};",
+            timeout=timeout,
+        )
+
+        try:
+            if timeout is not None and timeout > 0:
+                response = self.client.event_loop.run_until_complete(
+                    asyncio.wait_for(
+                        self.client.step_awaitable(
+                            experiment_id,
+                            sync=True,
+                        ),
+                        timeout=timeout,
+                    )
+                )
+            else:
+                response = self.client.step(experiment_id, sync=True)
+
+        except asyncio.TimeoutError as exc:
+            raise GamaCommandError(
+                f"GAMA step timed out after {timeout} seconds. "
+                "The GAMA server may be stopped, blocked, or overloaded."
+            ) from exc
+
+        if response["type"] != MessageTypes.CommandExecutedSuccessfully.value:
+            raise GamaCommandError(f"Failed to execute step: {response}")
+
+        return self._execute_expression(
+            experiment_id,
+            r"GymAgent[0].data",
+            timeout=timeout,
+        )
 
 
 class ContextualGamaEnv(ContextualDiscreteMDP):
@@ -46,9 +208,16 @@ class ContextualGamaEnv(ContextualDiscreteMDP):
         nameActions, seed, name).
     """
  
-    def __init__(self, gaml_experiment_path, gaml_experiment_name, 
-             gama_ip_address="localhost", gama_port=6868,
-             gaml_experiment_parameters=None, **kwargs):
+    def __init__(
+        self,
+        gaml_experiment_path,
+        gaml_experiment_name,
+        gama_ip_address="localhost",
+        gama_port=6868,
+        gaml_experiment_parameters=None,
+        step_timeout=30.0,
+        **kwargs,
+    ):
         # 1. Safety default
         self.gama_client = None
         
@@ -58,12 +227,14 @@ class ContextualGamaEnv(ContextualDiscreteMDP):
         self.gama_ip_address = gama_ip_address
         self.gama_port = gama_port
         self.gaml_experiment_parameters = gaml_experiment_parameters or []
+        self.step_timeout = step_timeout
         
-        self.gama_client = GamaClientWrapper(gama_ip_address, gama_port)
+        self.gama_client = GymAgroCarbonGamaClientWrapper(gama_ip_address, gama_port)
         self.experiment_id = self.gama_client.load_experiment(
             self.gaml_file_path,
             self.experiment_name,
-            self.gaml_experiment_parameters,
+            parameters=self.gaml_experiment_parameters,
+            timeout=self.step_timeout,
         )
         
         # 3. Parent init
@@ -97,7 +268,8 @@ class ContextualGamaEnv(ContextualDiscreteMDP):
         self.experiment_id = self.gama_client.load_experiment(
             self.gaml_file_path,
             self.experiment_name,
-            parameters,
+            parameters=self.gaml_experiment_parameters,
+            timeout=self.step_timeout,
         )
     
     def reset(self, seed=None, options=None):
@@ -127,27 +299,34 @@ class ContextualGamaEnv(ContextualDiscreteMDP):
         # Write reset variables
         self.gama_client._execute_expression(
             self.experiment_id,
-            f"pending_contexts <- [{self.c}];"
+            f"pending_contexts <- [{self.c}];",
+            timeout=self.step_timeout,
         )
         self.gama_client._execute_expression(
             self.experiment_id,
-            f"pending_states <- [{self.s}];"
+            f"pending_states <- [{self.s}];",
+            timeout=self.step_timeout,
         )
         self.gama_client._execute_expression(
             self.experiment_id,
-            "reset_requested <- true;"
+            "reset_requested <- true;",
+            timeout=self.step_timeout,
         )
  
         # Trigger one GAMA step to execute the apply_python_reset reflex
         from gama_client.message_types import MessageTypes
-        response = self.gama_client.client.step(self.experiment_id, sync=True)
+        response = self.gama_client.execute_raw_step(
+            self.experiment_id,
+            timeout=self.step_timeout,
+        )
         if response["type"] != MessageTypes.CommandExecutedSuccessfully.value:
             raise RuntimeError(f"GAMA reset step failed: {response}")
  
         # Read the updated gym_interface.data
         reset_data = self.gama_client._execute_expression(
             self.experiment_id,
-            r"gym_interface.data"
+            r"gym_interface.data",
+            timeout=self.step_timeout,
         )
  
         # Verify coherence between Python and GAMA
@@ -221,7 +400,11 @@ class ContextualGamaEnv(ContextualDiscreteMDP):
         gama_action = [int(action)]
 
         # Execute one step in GAMA.
-        step_data = self.gama_client.execute_step(self.experiment_id, gama_action)
+        step_data = self.gama_client.execute_step(
+            self.experiment_id,
+            gama_action,
+            timeout=self.step_timeout,
+        )
 
         # Parse GAMA response.
         observation, reward, terminated, truncated, info = self._parse_step_response(
@@ -247,9 +430,9 @@ class ContextualGamaEnv(ContextualDiscreteMDP):
         self.lastaction = a_real
         self.lastreward = reward
 
-        # Resample context if dynamic.
-        if not self.c_is_static:
-            self.c = categorical_sample(self.nu, self.np_random)
+        # Resample context if dynamic. Done in GAMA
+        """ if not self.c_is_static:
+            self.c = categorical_sample(self.nu, self.np_random) """
 
         return observation, reward, terminated, truncated, info
 

@@ -15,6 +15,9 @@ import os
 import copy
 import time
 import csv
+import json
+import traceback
+from datetime import datetime
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -130,35 +133,97 @@ def write_compliance_csv(records, output_path):
 
 def sequentialRuns(env, learner, nbReplicates, timeHorizon, root_folder):
     """
-    Run multiple replicates sequentially, collecting rewards and action counts.
+    Run multiple replicates sequentially for a single learner.
+
+    Each replicate is executed with an independent deep copy of the learner.
+    The function collects cumulative reward dump files, action-count summaries,
+    time-indexed action frequencies, and farmer-compliance records when
+    available.
+
+    If a replicate fails, the failure is logged to a JSON file containing the
+    learner name, replicate index, error type, error message, and traceback.
+    The original exception is then re-raised so that the top-level experiment
+    runner can write the global experiment error log and close the environment
+    cleanly. This avoids silently producing incomplete aggregate results.
+
+    Parameters
+    ----------
+    env : gymnasium.Env
+        Environment used for the experiment.
+    learner : Agent
+        Learner instance to evaluate.
+    nbReplicates : int
+        Number of independent replicates.
+    timeHorizon : int
+        Number of steps per replicate.
+    root_folder : str
+        Folder where cumulative reward dumps and failure logs are written.
 
     Returns
     -------
-    tuple (list, float, np.ndarray)
-        - cumRewardFiles: list of filenames for cumMeans dumps
-        - meanElapsedTime: average time per replicate
-        - avg_action_counts: mean action counts across replicates, shape (nC, nA)
-        - time_action_freqs: frequency of action pulls per timestep across replicates
-        - all_compliance_records: farmer compliance info
+    tuple
+        A tuple containing:
+
+        - cumRewardFiles : list of str
+            Filenames for cumulative reward dumps.
+        - meanElapsedTime : float
+            Average runtime per replicate, in seconds.
+        - avg_action_counts : numpy.ndarray
+            Mean action counts across replicates, with shape ``(nC, nA)``.
+        - time_action_freqs : numpy.ndarray
+            Frequency of action pulls per timestep across replicates.
+        - all_compliance_records : list of dict
+            Farmer-compliance records collected during GAMA runs. Each record is
+            augmented with the replicate index and learner name.
     """
     cumRewardFiles = []
     all_action_counts = []
     all_time_action_counts = []
     all_compliance_records = []
+    failed_runs = []
 
     t0 = time.time()
 
     for rep in range(nbReplicates):
         learner_copy = copy.deepcopy(learner)
 
-        filename, action_counts, time_action_counts, compliance_records = (
-            one_xp_run_with_actions_and_dump(
-                env,
-                learner_copy,
-                timeHorizon,
-                root_folder,
+        try:
+            filename, action_counts, time_action_counts, compliance_records = (
+                one_xp_run_with_actions_and_dump(
+                    env,
+                    learner_copy,
+                    timeHorizon,
+                    root_folder,
+                )
             )
-        )
+
+        except Exception as e:
+            failure = {
+                "timestamp": datetime.now().isoformat(),
+                "agent": learner.name(),
+                "replicate": rep,
+                "error_type": type(e).__name__,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }
+            failed_runs.append(failure)
+
+            failed_path = os.path.join(
+                root_folder,
+                f"failed_runs_{learner.name()}.json",
+            )
+
+            with open(failed_path, "w", encoding="utf-8") as f:
+                json.dump(failed_runs, f, indent=2)
+
+            print(
+                f"[ERROR] Replicate failed | "
+                f"agent={learner.name()} | rep={rep} | "
+                f"{type(e).__name__}: {e}"
+            )
+            print(f"[ERROR] Failed replicate log written to: {failed_path}")
+
+            raise
 
         cumRewardFiles.append(filename)
         all_action_counts.append(action_counts)

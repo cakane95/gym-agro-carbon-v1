@@ -14,6 +14,8 @@ import os
 import sys
 import asyncio
 import yaml
+import traceback
+from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
@@ -134,6 +136,7 @@ async def main():
     env_cfg = config["environment"]
     gama_cfg = config.get("gama", {})
     farmer_cfg = gama_cfg.get("farmer", {})
+    step_timeout = gama_cfg.get("step_timeout", 30.0)
     agent_cfgs = config["agents"]
     c_is_static = env_cfg.get("c_is_static", True)
     context_p_cut_scale_gap = env_cfg.get("context_p_cut_scale_gap", 0.05)
@@ -204,6 +207,7 @@ async def main():
             compliance_params=farmer_cfg,
             gaml_experiment_path=gaml_path,
             gaml_experiment_name=gaml_experiment_name,
+            step_timeout=step_timeout,
         )
 
     nS = env.nS
@@ -238,6 +242,9 @@ async def main():
     print(f"\nResults will be saved to: {results_dir}")
     print(f"Starting experiment...\n")
 
+    error_log_path = os.path.join(results_dir, "experiment_error.txt")
+    backend_name = "Python" if python_only else "GAMA"
+
     try:
         if python_only:
             runSequentialPythonExperiment(
@@ -261,12 +268,75 @@ async def main():
                 oracle_env=oracle_env,
             )
 
-        backend_name = "Python" if python_only else "GAMA"
         print(f"\n[DONE] {backend_name} experiment '{scenario_name}' completed successfully.")
+
+    except KeyboardInterrupt:
+        interrupt_log_path = os.path.join(results_dir, "experiment_interrupted.txt")
+
+        print(f"\n[INTERRUPTED] {backend_name} experiment '{scenario_name}' interrupted by user.")
+        print(f"[INTERRUPTED] Details written to: {interrupt_log_path}")
+
+        os.makedirs(results_dir, exist_ok=True)
+
+        with open(interrupt_log_path, "w", encoding="utf-8") as f:
+            f.write("GymAgroCarbon experiment interrupted by user\n")
+            f.write("=" * 60 + "\n")
+            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"Scenario: {scenario_name}\n")
+            f.write(f"Environment: {exp_cfg['name']}\n")
+            f.write(f"Backend: {backend_name}\n")
+            f.write(f"nS: {env_cfg['nS']}\n")
+            f.write(f"nA: {env_cfg['nA']}\n")
+            f.write(f"nC: {env_cfg['nC']}\n")
+            f.write(f"Difficulty: {env_cfg['difficulty']}\n")
+            f.write(f"p_cut: {env_cfg['p_cut']}\n")
+            f.write(f"c_is_static: {c_is_static}\n")
+            f.write(f"Horizon: {exp_cfg['timeHorizon']}\n")
+            f.write(f"Replicates: {exp_cfg['nbReplicates']}\n")
+            f.write(f"Agents: {[a['class'] for a in agent_cfgs]}\n")
+            f.write("\nTraceback:\n")
+            f.write(traceback.format_exc())
+
+        raise
+
+    except Exception as e:
+        print(f"\n[ERROR] {backend_name} experiment '{scenario_name}' failed.")
+        print(f"[ERROR] {type(e).__name__}: {e}")
+        print(f"[ERROR] Details written to: {error_log_path}")
+
+        os.makedirs(results_dir, exist_ok=True)
+
+        with open(error_log_path, "w", encoding="utf-8") as f:
+            f.write("GymAgroCarbon experiment failed\n")
+            f.write("=" * 60 + "\n")
+            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"Scenario: {scenario_name}\n")
+            f.write(f"Environment: {exp_cfg['name']}\n")
+            f.write(f"Backend: {backend_name}\n")
+            f.write(f"nS: {env_cfg['nS']}\n")
+            f.write(f"nA: {env_cfg['nA']}\n")
+            f.write(f"nC: {env_cfg['nC']}\n")
+            f.write(f"Difficulty: {env_cfg['difficulty']}\n")
+            f.write(f"p_cut: {env_cfg['p_cut']}\n")
+            f.write(f"c_is_static: {c_is_static}\n")
+            f.write(f"Horizon: {exp_cfg['timeHorizon']}\n")
+            f.write(f"Replicates: {exp_cfg['nbReplicates']}\n")
+            f.write(f"Agents: {[a['class'] for a in agent_cfgs]}\n")
+            f.write("\n")
+            f.write(f"Error type: {type(e).__name__}\n")
+            f.write(f"Error: {e}\n\n")
+            f.write("Traceback:\n")
+            f.write(traceback.format_exc())
+
+        raise
 
     finally:
         if hasattr(env, "close"):
-            env.close()
+            try:
+                env.close()
+                print("[CLEANUP] Environment closed.")
+            except Exception as close_error:
+                print(f"[WARN] Failed to close environment cleanly: {close_error}")
 
 
 if __name__ == "__main__":
