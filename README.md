@@ -1,237 +1,312 @@
-# GYM AGRO CARBON
+# GymAgroCarbon
 
-This project provides a framework to instantiate contextual Markov Decision Processes and connect them to agent-based models built in GAMA. The long-term goal is to build a reinforcement-learning recommender system that interacts with BDI farmer agents, who may choose to follow or ignore the recommended actions.
+**GymAgroCarbon** is a reinforcement learning benchmark designed to evaluate RL algorithms under combined frictions that arise in real-world decision systems: contextual heterogeneity, delayed returns, and decision-mediated execution. We formalize this setting as a **contextual Markov decision process with corrupted action execution**, where recommended actions are filtered through a structured compliance mechanism before being executed.
 
-A *contextual Markov decision process* is defined by the tuple
+The motivating application is Soil Organic Carbon (SOC) management in Sahelian agroforestry. In this setting, a policymaker repeatedly recommends land-use practices across heterogeneous parcels. Parcel responses depend on local conditions such as soil type, agroforestry interventions can generate delayed ecological benefits, and farmers may not always follow the recommended actions.
 
-$$
-\mathfrak{M} = \big(\mathcal{C}, \mathcal{S}, \mathcal{A}, H, \mathcal{M}\big),
-$$
+GymAgroCarbon provides a family of configurable environments capturing:
 
-where $\mathcal{C}$ is a *finite* set of contexts, $\mathcal{S}$ is the state space shared across all contexts, $\mathcal{A}$ is the common action space, $H \in \mathbb{N}^\star$ is the finite horizon of an episode, and $\mathcal{M} : \mathcal{C} \to \{M^c\}_{c \in \mathcal{C}}$ is the *contextual mapping* that associates each context $c \in \mathcal{C}$ with an episodic MDP
+1. **Contextual heterogeneity**: the value of actions depends on observed parcel contexts.
+2. **Delayed ecological returns**: tree protection can initiate a multi-season maturation process that changes future rewards.
+3. **Decision-mediated execution**: the learner recommends an action, but the action actually executed may be filtered by external agents.
 
-$$
-M^c = \big(\mathcal{S}, \mathcal{A}, H, P^c, r^c, \mu_0^c\big),
-$$
+The benchmark features a dual implementation:
 
-where $P^c = \{P_h^c\}_{h=1}^H$ denotes the transition kernels, $r^c = \{r_h^c\}_{h=1}^H$ denotes the reward functions, and $\mu_0^c$ is the initial state distribution.
+- a **lightweight Python backend** for controlled tabular evaluation, oracle computation, and fast debugging;
+- a **GAMA agent-based simulation backend** that models structured action corruption through cognitive farmer agents.
 
-## GymAgroCarbon Environments
+In the GAMA backend, Belief--Desire--Intention (BDI) farmer agents may accept or override RL recommendations based on stylized socioeconomic and cognitive factors such as household pressure and knowledge of tree benefits. This makes it possible to evaluate algorithms not only as ideal MDP controllers, but also as recommendation policies whose actions must survive a realistic implementation layer.
 
-GymAgroCarbon provides 12 contextual MDP environments for evaluating exploration strategies in agroforestry SOC management. Each environment models a Regenerative Natural Assistance (RNA) decision problem where an agent selects land-use practices (fallow, fertilized fallow, tree protection, baseline) on a parcel with heterogeneous soil contexts.
+## Environment family
 
-### Learning Scopes
+GymAgroCarbon currently provides three contextual-dependence regimes:
 
-**Agnostic (classical MDP)** — Rewards and transitions are identical across all contexts. The context is observed but carries no information. Algorithms that pool data across contexts are expected to perform best.
+- `agrocarbon-agnostic`: contexts are observed but do not affect rewards or transitions.
+- `agrocarbon-reward-contextual`: contexts affect rewards but not transitions.
+- `agrocarbon-fully-contextual`: contexts affect both rewards and transitions through context-dependent tree persistence.
 
-**Reward-Contextual** — Rewards depend on the soil context (via per-context multipliers on base means). Transitions remain context-independent. Algorithms must learn different reward structures per context to achieve optimal regret.
+Each regime can be combined with static or dynamic context dynamics and with four difficulty scenarios: easy deterministic, easy stochastic, hard deterministic, and hard stochastic.
 
-**Fully-Contextual** — Both rewards and transitions depend on the context (e.g., different tree destruction probabilities per soil type). *(Planned — not yet implemented.)*
+The corresponding GAMA-backed environments are:
 
-### Difficulty Scenarios
+- `gama-agrocarbon-agnostic`
+- `gama-agrocarbon-reward-contextual`
+- `gama-agrocarbon-fully-contextual`
 
-| Scenario | Difficulty | p_cut | Description |
-|----------|-----------|-------|-------------|
-| 1 | Easy | 0.0 | Large reward gaps (0.2–1.2), low noise (σ=0.05), deterministic transitions. Easiest to learn. |
-| 2 | Easy | 0.2 | Large reward gaps, low noise, but 20% chance of tree destruction each season. Investment in RNA is risky. |
-| 3 | Hard | 0.0 | Tight reward gaps (0.4–0.7), high noise (σ=0.2), deterministic transitions. Requires extensive exploration to distinguish actions. |
-| 4 | Hard | 0.2 | Tight gaps, high noise, and stochastic tree destruction. The most challenging configuration. |
+## Docker architecture
 
-### Full Environment Grid
+GymAgroCarbon runs through a Docker-based Python–GAMA architecture composed of two services:
 
-| | Easy / Det (S1) | Easy / Stoch (S2) | Hard / Det (S3) | Hard / Stoch (S4) |
-|---|---|---|---|---|
-| **Agnostic** | `agnostic-easy-det` | `agnostic-easy-stoch` | `agnostic-hard-det` | `agnostic-hard-stoch` |
-| **Reward-Contextual** | `reward-ctx-easy-det` | `reward-ctx-easy-stoch` | `reward-ctx-hard-det` | `reward-ctx-hard-stoch` |
-| **Fully-Contextual** | `full-ctx-easy-det` | `full-ctx-easy-stoch` | `full-ctx-hard-det` | `full-ctx-hard-stoch` |
+- **`gama-headless`** runs the GAMA agent-based simulation server and exposes it through a socket connection.
+- **`gym-agent`** runs the Python RL environments, learners, experiment scripts, tests, and analysis utilities.
 
-## Reward Design
-
-The environment models the seasonal decision of a Sahelian parcel manager choosing among four land-management practices: simple fallow (`fallow`), fertilized fallow with organic matter inputs (`fert_fallow`), farmer-managed natural regeneration (`tree`/RNA), and conventional cropping (`baseline`). Each practice provides a different immediate reward, with conventional cropping being the most productive in the short term.
-
-At the same time, the presence of a mature tree on the parcel, typically a *Faidherbia albida*, can improve future yields. This effect is not uniform across practices: cropping under the tree canopy benefits the most from improved soil fertility and shading, while simple fallow benefits only marginally. This is represented by an age-dependent bonus modulated by an action-specific coefficient.
-
-In the agnostic reward setting, the mean reward is defined as:
-
-$$
-R(s,a) = \text{base\_means}[a] + \text{age\_bonus}(s) \times \text{action\_bonus\_scales}[a].
-$$
-
-Here, `base_means[a]` captures the immediate productivity of action `a`, while `age_bonus(s)` increases with the tree-age state `s`. The vector `action_bonus_scales` controls how much each practice benefits from tree maturity. For example:
-
-```python
-action_bonus_scales = [0.2, 0.4, 0.3, 1.0]
-```
-
-With this design, `baseline` receives the full tree-age bonus, while `fallow` receives only a small fraction of it. This creates a temporal trade-off: the `tree` action is the only action that initiates tree growth, but it has a lower immediate reward than `baseline`. The agent must therefore accept a short-term opportunity cost in order to reach a future state where the mature tree significantly improves returns.
-
-For example, at state s=0, where no tree is present, baseline has an immediate mean reward of 1.2, while tree has a mean reward of 0.867. However, at maturity (s=6 when nS=7), the age bonus reaches 0.5, and baseline obtains:
-
-$$1.2+0.5×1.0=1.70.$$
-
-The optimal strategy should therefore learn when it is worth planting early and then exploiting baseline once the tree is mature. On a short horizon such as H=20, this trade-off is especially challenging because the tree requires several seasons to mature and may be destroyed with probability p_cut, forcing the process to restart.
-
-## Dockerized Python–GAMA Headless Architecture
-
-The project runs through a Docker-based setup composed of two main services. The first service runs **GAMA headless** and exposes the GAMA server through a socket connection. The second service runs the **Python RL environment**, learners, experiment scripts, and tests.
-
-Python communicates with GAMA through the headless API: it sends actions, triggers simulation steps, reads observations and rewards, and controls experiment resets.
-
-At a high level, the architecture is:
+The Python backend interacts with GAMA through a Gym-like wrapper. At each step, Python sends a recommended action to GAMA, triggers one simulation step, and reads back the resulting observation, reward, termination flags, and diagnostic information.
 
 ```text
-Python RL agents
-      ↓
+RL learner
+   ↓
 ContextualGamaEnv
-      ↓
-GAMA Headless API / socket
-      ↓
+   ↓
+GAMA headless socket API
+   ↓
 GAMA ABM model
-      ↓
-Parcel dynamics, rewards, transitions
-      ↓
-State / Reward / Info returned to Python
+   ↓
+Parcel dynamics + farmer compliance + rewards
+   ↓
+Observation / reward / info returned to Python
 ```
+This design keeps the learner interface close to standard Gymnasium environments while allowing execution dynamics, farmer compliance, and socio-ecological mechanisms to be modeled inside GAMA.
 
-This allows the learning algorithms to keep a standard Gym-like interface while delegating the environmental dynamics to the GAMA agent-based model.
+For long experiment batches, GAMA can be restarted between scenarios using Docker Compose. The experiment runner also writes error logs when GAMA commands fail, time out, or are interrupted
 
-## Repository Organization
+## Repository organization
 
-The repository is organized to keep the reusable Python package, GAMA models, tests, examples, and paper-specific experiments clearly separated. The `src/` directory contains the Python package, including contextual MDP environments, GAMA-backed environments, RL learners, factories, and experiment runners. The `gama_models/` directory contains the GAML model files executed by GAMA headless. The `tests/` directory contains handshake, environment-cycle, learner, and mini-experiment tests used to validate the Python–GAMA pipeline. The `examples/` directory contains simple Python-only examples, while `articles/` contains experiment configurations and scripts specific to paper submissions such as NeurIPS 2026.
+The repository separates the reusable Python package, the GAMA agent-based model, tests, and paper-specific experiment assets.
 
 ```text
-./
-  docker-compose.yml
-  Dockerfile
-  poetry.lock
-  poetry.toml
-  pyproject.toml
-  README.md
-  .gitignore
-
-  articles/
-    neurips26/
-      configs/
-        scenario_1_easy_det.yaml
-      scripts/
-        run_experiment.py
-        run_all.py # Not implemented yet
-
-  examples/
-    run_basic_agrocarbon.py
-
-  gama_models/
-    EcoSysML/
-      includes/
-      models/
-        EcoSysMLBehavior.gaml
-        EcoSysMLStructure.gaml
-        main.gaml
-
-  src/
-    contextual_stat_rl/
-      __init__.py
-
-      experiments/
-        __init__.py
-        sequential_experiment.py
-
-      environments/
-        __init__.py
-        register.py
-        gama_register.py
-
-        ContextualMDPs_discrete/
-          __init__.py
-          contextualMDP.py
-          contextual_gama_env.py
-
-          factories/
-            agrocarbon_factory.py
-            gama_agrocarbon_factory.py
-
-        BatchContextualMDPs_discrete/
-          # Not implemented yet
-
-      learners/
-        __init__.py
-
-        ContextualMDPs_discrete/
-          ContextualAgentInterface.py
-          ContextualIMED_RL.py
-          ETC.py
-
-          Optimal/
-            ContextualOptimalControl.py
-
-  tests/
-    test_handshake.py
-    test_rl_cycle.py
-    test_rl_learners.py
-    test_mini_experiment.py
-    test_mini_contextual_reward_experiment.py
+.
+├── docker-compose.yml        # Two-service setup: GAMA headless + Python RL agent
+├── Dockerfile                # Python environment used by gym-agent
+├── pyproject.toml            # Python package configuration
+├── README.md
+│
+├── src/
+│   └── contextual_stat_rl/
+│       ├── environments/     # Contextual MDPs, GAMA wrappers, environment factories
+│       ├── learners/         # ETC, IMED-RL, UCRL3, Q-learning, oracle controllers
+│       └── experiments/      # Sequential runners, regret analysis, plotting utilities
+│
+├── gama_models/
+│   └── EcoSysML/             # GAML model used by the GAMA backend
+│
+├── tests/                    # Integration, learner, dynamic-context, and mini-experiment tests
+│
+├── examples/                 # Small Python-only examples
+│
+└── articles/
+    └── neurips26/
+        ├── configs/          # YAML experiment configurations
+        ├── scripts/          # Experiment launch and analysis scripts
+        └── results/          # Generated outputs, usually ignored or regenerated
 ```
 
-## Quick Start
+The main reusable code lives in `src/contextual_stat_rl/`. The GAMA model is located under `gama_models/EcoSysML/`, with `main.gaml` as the entry point used by the Dockerized GAMA service. Paper-specific configurations and scripts are kept under `articles/neurips26/` so that benchmark code and submission-specific experiments remain separated.
 
-### Prerequisites
+The repository currently includes both Python-only and GAMA-backed environments. The Python backend is useful for fast debugging and oracle computation, while the GAMA backend is used when compliance-aware execution and BDI farmer agents are required.
 
-- Docker and Docker Compose installed
+## Quick start
+
+## Prerequisites
+
+GymAgroCarbon is designed to run through Docker. The recommended setup requires:
+
+- Docker
+- Docker Compose
 - Git
 
-### Installation
+No local installation of GAMA is required when using Docker. The GAMA headless server is launched as a Docker service.
+
+## Installation
+
+Clone the repository and build the Docker services:
 
 ```bash
-git clone https://github.com/cakane95/gym-agro-carbon-v1.git
-cd gym-agro-carbon-v1
+git clone <anonymous-repository-url>
+cd gym-agro-carbon
+docker-compose up -d --build
 ```
 
-### Launch
+Start the two Docker services:
 
 ```bash
-# Build and start containers (GAMA headless + Python agent)
-docker-compose up -d
+docker-compose up -d --build
+```
+This starts:
 
-# Wait for GAMA headless to initialize (~15 seconds)
-sleep 15
+`gama-headless`: the GAMA simulation server;
+`gym-agent`: the Python environment used to run tests, experiments, and analysis scripts.
+
+To check that the containers are running:
+
+```bash
+docker-compose ps
 ```
 
-### Run Tests
+### Run tests
 
-Tests should be run in order — each validates a layer of the pipeline.
+Tests should be run in order. Each test validates one layer of the Python--GAMA pipeline.
 
 ```bash
-# 1. Verify connectivity to GAMA headless server
+# 1. Verify connectivity to the GAMA headless server
 docker-compose exec gym-agent python tests/test_handshake.py
 
 # 2. Validate the ContextualGamaEnv reset/step/close cycle
 docker-compose exec gym-agent python tests/test_rl_cycle.py
 
-# 3. Verify that all RL agents can interface with the environment
+# 3. Validate dynamic context resampling in the GAMA backend
+docker-compose exec gym-agent python tests/test_dynamic_context_rl_cycle.py
+
+# 4. Verify that fully-contextual transition kernels depend on context
+docker-compose exec gym-agent python tests/test_fully_contextual_transitions.py
+
+# 5. Verify that all RL agents can interface with the environment
 docker-compose exec gym-agent python tests/test_rl_learners.py
 
-# 4. Run a minimal experiment (agnostic, 20 steps, 5 replicas)
+# 6. Run a minimal experiment (agnostic, short horizon)
 docker-compose exec gym-agent python tests/test_mini_experiment.py
 
-# 5. Run a minimal experiment (reward-contextual, 20 steps, 5 replicas)
+# 7. Run a minimal experiment (reward-contextual, short horizon)
 docker-compose exec gym-agent python tests/test_mini_contextual_reward_experiment.py
 ```
 
-### Run Experiments
+The first tests validate the GAMA connection and environment cycle. The dynamic-context and fully-contextual tests check the benchmark variants used to define the full environment family. The learner and mini-experiment tests then verify that the RL agents can run end-to-end with the environment.
+
+A YAML-based smoke test is also provided to check the full experiment runner with a fully-contextual dynamic setting:
 
 ```bash
-# Run Full compliance expermiments
+docker-compose exec gym-agent python articles/neurips26/scripts/run_experiment.py articles/neurips26/configs/test_full_dynamic_fully.yaml
+```
+This test is useful for validating the complete path from YAML configuration to GAMA execution, learner evaluation, logging, and result generation.
 
-# Scenario 1 : large gaps, deterministic tree growth
+## Running a YAML scenario
+
+Paper experiments are defined through YAML configuration files under:
+
+```text
+articles/neurips26/configs/
+```
+
+Each YAML file specifies the environment, horizon, number of replicates, GAMA farmer profile, and list of RL agents to evaluate. Detailed documentation of the YAML fields is provided in:
+
+```text
+articles/neurips26/configs/README.md
+```
+
+### GAMA backend
+
+To run a scenario with the GAMA agent-based backend:
+
+```bash
 docker-compose exec gym-agent python articles/neurips26/scripts/run_experiment.py articles/neurips26/configs/full_compliance/scenario_1_easy_det.yaml
-
-
 ```
 
-### Shutdown
+This uses the environment name declared in the YAML file, for example:
+
+```yaml
+experiment:
+  name: "gama-agrocarbon-reward-contextual"
+```
+
+The main paper experiments use the reward-contextual, static-context setting:
+
+```yaml
+experiment:
+  name: "gama-agrocarbon-reward-contextual"
+
+environment:
+  c_is_static: true
+```
+
+### Python-only backend
+
+The same scenario can also be run with the lightweight Python backend:
 
 ```bash
-docker-compose down
+docker-compose exec gym-agent python articles/neurips26/scripts/run_experiment.py articles/neurips26/configs/full_compliance/scenario_1_easy_det.yaml --python-only
 ```
 
+In this mode, the GAMA backend is bypassed. The Python backend is useful for fast debugging, oracle checks, and backend-consistency experiments.
+
+## Main paper setting
+
+The main experiments use the reward-contextual, static-context setting:
+
+```yaml
+experiment:
+  name: "gama-agrocarbon-reward-contextual"
+
+environment:
+  c_is_static: true
+```
+
+The benchmark also supports fully contextual dynamics and dynamic contexts:
+
+```yaml
+experiment:
+  name: "gama-agrocarbon-fully-contextual"
+
+environment:
+  c_is_static: false
+  context_p_cut_scale_gap: 0.05
+  reference_context: 0
+```
+
+These variants are part of the benchmark family, but the main paper focuses on the reward-contextual static-context setting.
+
+## Outputs and failure logs
+
+Results are written to:
+
+```text
+articles/neurips26/results/<scenario_name>/
+```
+
+Each scenario folder contains:
+
+```
+regret/       # cumulative reward dumps, regret logs, regret plots
+actions/      # action distributions and action-frequency heatmaps
+compliance/   # recommended/executed actions and farmer-compliance records
+```
+
+If an experiment fails, the runner writes:
+
+```text
+experiment_error.txt
+```
+
+If the run is interrupted manually, it writes:
+
+```text
+experiment_interrupted.txt
+```
+
+If a replicate fails inside an experiment, the runner also writes:
+
+```text
+regret/failed_runs_<agent>.json
+```
+
+These logs contain the scenario metadata, learner name, replicate index, error type, error message, and traceback.
+
+## Restarting GAMA between scenarios
+
+For long experiment batches, it is recommended to restart the GAMA service between scenarios:
+
+```bash
+docker-compose restart gama-headless
+```
+
+Then rerun the desired YAML scenario:
+
+```bash
+docker-compose exec gym-agent python articles/neurips26/scripts/run_experiment.py <path-to-config.yaml>
+```
+
+The GAMA command timeout can be configured in the YAML file:
+
+```yaml
+gama:
+  step_timeout: 30.0
+```
+
+For debugging failure handling, a shorter value such as 5.0 is useful. For full experiments, use a more conservative value such as `30.0` or `60.0`.
+
+## Citation
+
+Citation information will be added after submission.
+
+## License
+
+The source code is released under the MIT License. Documentation, figures, and paper-related text are released under CC BY 4.0 unless otherwise stated.
 

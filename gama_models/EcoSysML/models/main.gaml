@@ -6,7 +6,7 @@
 * Python does not call GAML actions directly.
 * Python only sets variables using expressions, then steps GAMA.
 *
-* Author: Cheikhou Akhmed KANE
+* Author: Anonymous
 * Tags: reinforcement-learning, agroforestry, RNA, contextual-MDP
 */
 

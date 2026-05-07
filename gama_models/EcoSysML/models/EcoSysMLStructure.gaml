@@ -1,7 +1,7 @@
 /**
 * Name: EcoSysMLStructure
 * Defines the static elements of a socio-ecological system. 
-* Author: Cheikhou Akhmed KANE
+* Author: Anonymous
 * Tags: 
 */
 

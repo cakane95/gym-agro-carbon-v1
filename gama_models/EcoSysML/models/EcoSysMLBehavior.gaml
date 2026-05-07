@@ -3,7 +3,7 @@
 * Defines the dynamic aspects of a socio-ecological system. 
 * Provides the elements needed to model the behavior of actors within an SES,
 * describing how they interact with their environment and make decisions.
-* Author: Cheikhou Akhmed KANE
+* Author: Anonymous
 * Tags: 
 */
 

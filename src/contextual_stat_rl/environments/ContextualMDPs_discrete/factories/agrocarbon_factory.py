@@ -386,7 +386,8 @@ def build_context_dist(nC):
 
 def build_agnostic_agrocarbon_config(nS=4, nA=4, nC=3, trigger_action=2, 
                                      p_cut=0.0, difficulty="easy",
-                                     c_is_static=True):
+                                     c_is_static=True,
+                                     context_p_cut_scale_gap=0.05,reference_context=0):
     return {
         "nS": nS,
         "nA": nA,
@@ -405,7 +406,8 @@ def build_agnostic_agrocarbon_config(nS=4, nA=4, nC=3, trigger_action=2,
 
 def build_reward_contextual_agrocarbon_config(nS=4, nA=4, nC=3, trigger_action=2, 
                                               p_cut=0.0, difficulty="easy",
-                                              c_is_static=True,):
+                                              c_is_static=True,
+                                              context_p_cut_scale_gap=0.05,reference_context=0):
     return {
         "nS": nS,
         "nA": nA,
