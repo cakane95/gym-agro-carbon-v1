@@ -18,7 +18,7 @@ Compare profiles:
     docker-compose exec gym-agent python articles/neurips26/scripts/run_compliance_analysis.py \
         --compare \
         articles/neurips26/results/full_compliance__scenario_4_hard_stoch \
-        articles/neurips26/results/medium_compliance__scenario_4_hard_stoch \
+        articles/neurips26/results/med_compliance__scenario_4_hard_stoch \
         articles/neurips26/results/low_compliance__scenario_4_hard_stoch
 """
 

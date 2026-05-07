@@ -2,7 +2,6 @@
 
 # Scenario 1: Easy / Deterministic
 # Large reward gaps, low noise, no tree destruction risk.
-# Easiest configuration — algorithms should converge quickly.
 
 experiment:
   name: "gama-agrocarbon-reward-contextual"

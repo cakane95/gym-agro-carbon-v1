@@ -2,7 +2,6 @@
 
 # Scenario 2: Easy / Stochastic
 # Large reward gaps, low noise, but 15% tree destruction risk.
-# Tests robustness: investment in RNA can be lost at any step.
 
 experiment:
   name: "gama-agrocarbon-reward-contextual"

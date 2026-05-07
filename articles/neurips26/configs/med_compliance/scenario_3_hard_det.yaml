@@ -2,7 +2,6 @@
 
 # Scenario 3: Hard / Deterministic
 # Tight reward gaps, high noise, no tree destruction risk.
-# Requires extensive exploration to distinguish actions.
 
 experiment:
   name: "gama-agrocarbon-reward-contextual"

@@ -243,6 +243,84 @@ environment:
 
 These variants are part of the benchmark family, but the main paper focuses on the reward-contextual static-context setting.
 
+## Compliance analysis
+
+GAMA-backed experiments write compliance records to the `compliance/` folder of each result directory. These records include the recommended action, the executed action, whether the farmer complied, and farmer-side variables.
+
+To analyze compliance for a single scenario:
+
+```bash
+docker-compose exec gym-agent python articles/neurips26/scripts/run_compliance_analysis.py \
+  articles/neurips26/results/low_compliance__scenario_4_hard_stoch
+```
+
+This produces:
+
+```text
+compliance/
+├── per-agent recommended vs executed action heatmaps
+├── global compliance heatmap over time
+├── compliance rate by agent
+└── compliance rate by recommended action
+```
+
+To compare compliance profiles for the same scenario:
+
+```bash
+docker-compose exec gym-agent python articles/neurips26/scripts/run_compliance_analysis.py \
+  --compare \
+  articles/neurips26/results/full_compliance__scenario_4_hard_stoch \
+  articles/neurips26/results/med_compliance__scenario_4_hard_stoch \
+  articles/neurips26/results/low_compliance__scenario_4_hard_stoch
+```
+
+This is useful for studying how farmer filtering changes across full, medium, and low compliance regimes.
+
+## Backend runtime comparison
+
+The benchmark provides both a GAMA backend and a lightweight Python backend. The GAMA backend is used for compliance-aware experiments, while the Python backend is useful for fast debugging, oracle checks, and backend-consistency experiments.
+
+To compare backend runtimes for one scenario, first run the scenario with GAMA:
+
+```bash
+docker-compose exec gym-agent python articles/neurips26/scripts/run_experiment.py \
+  articles/neurips26/configs/full_compliance/scenario_1_easy_det.yaml
+```
+
+Then run the same scenario with the Python-only backend:
+
+```bash
+docker-compose exec gym-agent python articles/neurips26/scripts/run_experiment.py \
+  articles/neurips26/configs/full_compliance/scenario_1_easy_det.yaml \
+  --python-only
+```
+
+The runtime comparison script expects result directories in pairs:
+
+```text
+<gama_result_dir> <python_result_dir>
+```
+
+Example for one scenario:
+
+```bash
+docker-compose exec gym-agent python articles/neurips26/scripts/compare_backend_runtime.py \
+  articles/neurips26/results/full_compliance__scenario_1_easy_det \
+  articles/neurips26/results_python/full_compliance__scenario_1_easy_det
+```
+
+Example for several scenarios:
+
+```bash
+docker-compose exec gym-agent python articles/neurips26/scripts/compare_backend_runtime.py \
+  articles/neurips26/results/full_compliance__scenario_1_easy_det \
+  articles/neurips26/results_python/full_compliance__scenario_1_easy_det \
+  articles/neurips26/results/full_compliance__scenario_2_easy_stoch \
+  articles/neurips26/results_python/full_compliance__scenario_2_easy_stoch
+```
+
+Arguments must always be passed as GAMA/Python result-directory pairs.
+
 ## Outputs and failure logs
 
 Results are written to:
