@@ -274,7 +274,7 @@ docker-compose exec gym-agent python articles/neurips26/scripts/run_compliance_a
   articles/neurips26/results/low_compliance__scenario_4_hard_stoch
 ```
 
-This is useful for studying how farmer filtering changes across full, medium, and low compliance regimes.
+This is useful for studying how farmer filtering changes across full, medium, and low compliance regimes. It must be ran after the single scenario is run.
 
 ## Backend runtime comparison
 
